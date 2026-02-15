@@ -76,7 +76,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec_tips,
                         COALESCE(s.Sale_Amount,0) AS total_sales
                      FROM shift s
-                     LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+                     LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID" . (peachtrack_has_column($conn,'tip','Is_Deleted') ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
                      WHERE s.Shift_ID = ?");
                 $sumStmt->bind_param("i", $current_shift_id);
                 $sumStmt->execute();
