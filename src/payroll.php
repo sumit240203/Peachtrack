@@ -13,6 +13,11 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
 
 require_once "header.php";
 
+// Employee list (for filtering + details)
+$employees = [];
+$res = $conn->query("SELECT Employee_ID, Employee_Name, User_Name FROM employee ORDER BY Employee_Name ASC");
+if ($res) $employees = $res->fetch_all(MYSQLI_ASSOC);
+
 // Range presets: day | week | month | custom
 $range = $_GET['range'] ?? 'week';
 $today = date('Y-m-d');
@@ -37,6 +42,7 @@ if ($range === 'day') {
 }
 
 $mode = $_GET['mode'] ?? 'unpaid'; // unpaid | paid | all
+$employeeFilter = $_GET['employee'] ?? 'all'; // all | employee_id
 
 $hasTipTime = peachtrack_has_column($conn, 'tip', 'Tip_Time');
 $hasPayPeriod = peachtrack_has_column($conn, 'tip', 'Pay_Period_ID');
@@ -52,6 +58,13 @@ $paidFilter = "";
 if ($hasPayPeriod) {
     if ($mode === 'unpaid') $paidFilter = " AND t.Pay_Period_ID IS NULL ";
     elseif ($mode === 'paid') $paidFilter = " AND t.Pay_Period_ID IS NOT NULL ";
+}
+
+$empFilterSql = "";
+$empFilterParam = null;
+if ($employeeFilter !== 'all') {
+    $empFilterSql = " AND e.Employee_ID = ? ";
+    $empFilterParam = (int)$employeeFilter;
 }
 
 // Payroll summary by employee
@@ -70,12 +83,17 @@ JOIN tip t ON t.Shift_ID = s.Shift_ID
 WHERE {$tipDateExpr} BETWEEN ? AND ?
   {$deletedFilter}
   {$paidFilter}
+  {$empFilterSql}
 GROUP BY e.Employee_ID, e.Employee_Name, e.User_Name
 ORDER BY total_tips DESC;
 ";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param('ss', $from, $to);
+if ($empFilterParam !== null) {
+    $stmt->bind_param('ssi', $from, $to, $empFilterParam);
+} else {
+    $stmt->bind_param('ss', $from, $to);
+}
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -112,9 +130,17 @@ $message = '';
 $messageType = '';
 
 // Mark period as paid (creates a pay period row + links tips)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_paid'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['mark_paid']) || isset($_POST['mark_paid_employee']))) {
+    $payEmployeeId = 0;
+    if (isset($_POST['mark_paid_employee'])) {
+        $payEmployeeId = (int)($_POST['employee_id'] ?? 0);
+    }
+
     if (!$hasPayPeriod) {
         $message = 'Payroll tracking requires a DB update (add tip.Pay_Period_ID / Paid_At / Paid_By). Run sql/alter_tip_payroll.sql in phpMyAdmin.';
+        $messageType = 'error';
+    } elseif ($payEmployeeId < 0) {
+        $message = 'Invalid employee.';
         $messageType = 'error';
     } else {
         $paidBy = (int)($_SESSION['id'] ?? 0);
@@ -123,30 +149,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_paid'])) {
         // Create pay period record if table exists; otherwise just stamp tips.
         $payPeriodId = null;
         if ($conn->query("SHOW TABLES LIKE 'tip_pay_period'")?->num_rows) {
-            $stmtPP = $conn->prepare("INSERT INTO tip_pay_period (Period_Start, Period_End, Paid_At, Paid_By) VALUES (?,?,?,?)");
-            $stmtPP->bind_param('sssi', $from, $to, $paidAt, $paidBy);
-            if ($stmtPP->execute()) {
-                $payPeriodId = (int)$conn->insert_id;
+            $note = ($payEmployeeId > 0) ? ('Paid single employee #'.$payEmployeeId) : 'Paid all employees';
+            $stmtPP = $conn->prepare("INSERT INTO tip_pay_period (Period_Start, Period_End, Paid_At, Paid_By, Notes) VALUES (?,?,?,?,?)");
+            if ($stmtPP) {
+                $stmtPP->bind_param('sssis', $from, $to, $paidAt, $paidBy, $note);
+                if ($stmtPP->execute()) {
+                    $payPeriodId = (int)$conn->insert_id;
+                }
             }
         }
 
         $conn->begin_transaction();
         try {
+            $empWhere = ($payEmployeeId > 0) ? " AND s.Employee_ID = ? " : "";
             $sqlUpd = "
 UPDATE tip t
 JOIN shift s ON s.Shift_ID = t.Shift_ID
 SET t.Pay_Period_ID = ?, t.Paid_At = ?, t.Paid_By = ?
 WHERE {$tipDateExpr} BETWEEN ? AND ?
   {$deletedFilter}
-  AND t.Pay_Period_ID IS NULL;
+  AND t.Pay_Period_ID IS NULL
+  {$empWhere};
 ";
             $stmtUpd = $conn->prepare($sqlUpd);
             $ppid = $payPeriodId; // can be null
-            $stmtUpd->bind_param('ssiss', $ppid, $paidAt, $paidBy, $from, $to);
+            if ($payEmployeeId > 0) {
+                $stmtUpd->bind_param('ssissi', $ppid, $paidAt, $paidBy, $from, $to, $payEmployeeId);
+            } else {
+                $stmtUpd->bind_param('ssiss', $ppid, $paidAt, $paidBy, $from, $to);
+            }
             $stmtUpd->execute();
 
             $conn->commit();
-            $message = 'Marked unpaid tips in this range as PAID.';
+            $message = ($payEmployeeId > 0)
+                ? 'Marked unpaid tips for this employee in this range as PAID.'
+                : 'Marked unpaid tips in this range as PAID.';
             $messageType = 'success';
         } catch (Throwable $e) {
             $conn->rollback();
@@ -175,7 +212,7 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
 
   <div style="height:14px"></div>
 
-  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1.1fr 1fr 1fr 1fr auto; gap:12px; align-items:end;">
+  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1.1fr 1fr 1fr 1.5fr 1fr auto; gap:12px; align-items:end;">
     <div>
       <label>Range</label>
       <select name="range" onchange="this.form.submit()">
@@ -194,6 +231,18 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
     <div>
       <label>To</label>
       <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
+    </div>
+
+    <div>
+      <label>Employee</label>
+      <select name="employee" onchange="this.form.submit()">
+        <option value="all" <?php echo ($employeeFilter==='all')?'selected':''; ?>>All employees</option>
+        <?php foreach ($employees as $e): ?>
+          <option value="<?php echo (int)$e['Employee_ID']; ?>" <?php echo ((string)$employeeFilter === (string)$e['Employee_ID'])?'selected':''; ?>>
+            <?php echo htmlspecialchars($e['Employee_Name'].' ('.$e['User_Name'].')'); ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
     </div>
 
     <div>
@@ -224,11 +273,12 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
         <th>Electronic</th>
         <th>Total Sales</th>
         <th>Tips Count</th>
+        <th class="no-print">Actions</th>
       </tr>
     </thead>
     <tbody>
       <?php if (!$rows): ?>
-        <tr><td colspan="7" class="muted">No tip entries found for this range/status.</td></tr>
+        <tr><td colspan="8" class="muted">No tip entries found for this range/status.</td></tr>
       <?php else: ?>
         <?php foreach ($rows as $r): ?>
           <tr>
@@ -239,6 +289,14 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
             <td class="muted">$<?php echo htmlspecialchars(number_format((float)$r['elec_tips'],2)); ?></td>
             <td>$<?php echo htmlspecialchars(number_format((float)$r['total_sales'],2)); ?></td>
             <td class="muted"><?php echo (int)$r['tip_count']; ?></td>
+            <td class="no-print">
+              <a class="btn btn-ghost" style="text-decoration:none;" href="payroll_details.php?<?php echo http_build_query(['employee_id'=>(int)$r['Employee_ID'],'from'=>$from,'to'=>$to,'range'=>$range,'mode'=>$mode]); ?>">Details</a>
+              <form method="POST" style="display:inline; margin-left:6px;">
+                <input type="hidden" name="mark_paid_employee" value="1" />
+                <input type="hidden" name="employee_id" value="<?php echo (int)$r['Employee_ID']; ?>" />
+                <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark this employee\'s unpaid tips in this range as PAID?')">Pay</button>
+              </form>
+            </td>
           </tr>
         <?php endforeach; ?>
       <?php endif; ?>
@@ -249,11 +307,11 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
 
   <form method="POST" class="no-print">
     <input type="hidden" name="mark_paid" value="1" />
-    <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark all unpaid tips in this date range as PAID? This is for payroll.')">
-      Mark this range as Paid
+    <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark ALL employees\' unpaid tips in this date range as PAID?')">
+      Mark this range as Paid (All employees)
     </button>
     <div class="muted" style="margin-top:10px; font-size:12px;">
-      This will link tips to a pay period and prevent double-paying next week.
+      Use row-level <strong>Pay</strong> to pay a single employee, or this button to pay everyone.
     </div>
   </form>
 </div>
