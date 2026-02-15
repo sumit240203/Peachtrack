@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$message) {
                 $stmt = $conn->prepare("INSERT INTO shift (Employee_ID, Start_Time, End_Time, Sale_Amount) VALUES (?, ?, ?, ?)");
                 $stmt->bind_param("issd", $empId, $start, $endVal, $sales);
-                if ($stmt->execute()) {}}
+                if ($stmt->execute()) {
                     $newId = $conn->insert_id;
                     header("Location: edit_shift.php?id=$newId&created=1");
                     exit;
