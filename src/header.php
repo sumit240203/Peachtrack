@@ -25,8 +25,8 @@ function nav_link($href, $label) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PeachTrack</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="dashboard.css" />
+  <link rel="stylesheet" href="style.css?v=<?php echo @filemtime(__DIR__ . '/style.css') ?: time(); ?>" />
+  <link rel="stylesheet" href="dashboard.css?v=<?php echo @filemtime(__DIR__ . '/dashboard.css') ?: time(); ?>" />
 </head>
 <body class="app">
 
