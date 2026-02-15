@@ -237,7 +237,7 @@ function fmt_duration($start, $end) {
 
   <div style="height:14px"></div>
 
-  <table class="table">
+  <table class="table table-shifts">
     <thead>
       <tr>
         <th>Shift</th>

@@ -145,6 +145,13 @@ label{display:block; font-weight:700; margin: 8px 0 6px; font-size: 13px;}
   .table{display:block; overflow-x:auto; -webkit-overflow-scrolling: touch;}
   .table th, .table td{white-space:nowrap;}
 
+  /* My Shifts: reduce columns on phones to avoid horizontal scrolling */
+  .table-shifts th:nth-child(2), .table-shifts td:nth-child(2),
+  .table-shifts th:nth-child(3), .table-shifts td:nth-child(3),
+  .table-shifts th:nth-child(4), .table-shifts td:nth-child(4){
+    display:none;
+  }
+
   /* Reduce topbar density */
   .topbar-card{padding:12px;}
 }

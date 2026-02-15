@@ -43,18 +43,27 @@ function nav_link($href, $label) {
 
     <nav class="nav">
       <?php nav_link('index.php', 'Dashboard'); ?>
+
       <?php if ($role === '102'): ?>
         <?php nav_link('my_shifts.php', '📈 My Shifts'); ?>
       <?php endif; ?>
-      <?php if ($baseRole === '101'): ?>
+
+      <?php if ($baseRole === '101' && $role === '101'): ?>
         <?php nav_link('reports.php', 'Reports'); ?>
         <?php nav_link('payroll.php', '💵 Payroll'); ?>
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
         <?php nav_link('create_shift.php', '➕ Create Shift'); ?>
       <?php endif; ?>
+
       <?php nav_link('about.php', 'ℹ️ About'); ?>
       <?php nav_link('logout.php', 'Logout'); ?>
+
+      <?php if ($baseRole === '101' && $role === '102'): ?>
+        <div class="muted" style="margin-top:10px; font-size:12px; line-height:1.3;">
+          You’re in <strong>Employee Mode</strong>. Toggle it off (top-right) to access Admin pages.
+        </div>
+      <?php endif; ?>
     </nav>
   </aside>
 
