@@ -8,12 +8,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $username = trim($_POST['username'] ?? '');
     $password = (string)($_POST['password'] ?? '');
 
-    $stmt = $conn->prepare(
-        "SELECT e.Employee_ID, e.Employee_Name, e.Type_Code, c.Password
-         FROM employee e
-         JOIN credential c ON e.Employee_ID = c.Employee_ID
-         WHERE e.User_Name = ?"
-    );
+    // If Is_Active column exists, block deactivated accounts. Fallback gracefully if DB hasn't been migrated yet.
+    $sql = "SELECT e.Employee_ID, e.Employee_Name, e.Type_Code, c.Password
+            FROM employee e
+            JOIN credential c ON e.Employee_ID = c.Employee_ID
+            WHERE e.User_Name = ?
+              AND (e.Is_Active IS NULL OR e.Is_Active = 1)";
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        // Fallback for older schema (no Is_Active column)
+        $sql = "SELECT e.Employee_ID, e.Employee_Name, e.Type_Code, c.Password
+                FROM employee e
+                JOIN credential c ON e.Employee_ID = c.Employee_ID
+                WHERE e.User_Name = ?";
+        $stmt = $conn->prepare($sql);
+    }
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();

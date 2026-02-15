@@ -78,7 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
 
 // Fetch employees
 $rows = [];
-$res = $conn->query("SELECT e.Employee_ID, e.Employee_Name, e.User_Name, e.Type_Code FROM employee e ORDER BY e.Employee_ID ASC");
+$res = $conn->query("SELECT e.Employee_ID, e.Employee_Name, e.User_Name, e.Type_Code, COALESCE(e.Is_Active,1) AS Is_Active FROM employee e ORDER BY e.Employee_ID ASC");
+if (!$res) {
+    // Fallback for older schema (no Is_Active column)
+    $res = $conn->query("SELECT e.Employee_ID, e.Employee_Name, e.User_Name, e.Type_Code, 1 AS Is_Active FROM employee e ORDER BY e.Employee_ID ASC");
+}
 if ($res) $rows = $res->fetch_all(MYSQLI_ASSOC);
 
 require_once "header.php";
@@ -147,6 +151,8 @@ require_once "header.php";
         <th>Name</th>
         <th>Username</th>
         <th>Role</th>
+        <th>Status</th>
+        <th class="no-print">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -156,10 +162,16 @@ require_once "header.php";
           <td><?php echo htmlspecialchars($r['Employee_Name']); ?></td>
           <td><?php echo htmlspecialchars($r['User_Name']); ?></td>
           <td><?php echo ((string)$r['Type_Code'] === '101') ? 'Manager/Admin' : 'Employee'; ?></td>
+          <td>
+            <?php echo ((int)($r['Is_Active'] ?? 1) === 1) ? '<span class="muted">Active</span>' : '<span class="muted">Deactivated</span>'; ?>
+          </td>
+          <td class="no-print">
+            <a class="btn btn-ghost" style="text-decoration:none;" href="edit_user.php?id=<?php echo (int)$r['Employee_ID']; ?>">Manage</a>
+          </td>
         </tr>
       <?php endforeach; ?>
       <?php if (empty($rows)): ?>
-        <tr><td colspan="4" class="muted">No employees found.</td></tr>
+        <tr><td colspan="5" class="muted">No employees found.</td></tr>
       <?php endif; ?>
     </tbody>
   </table>

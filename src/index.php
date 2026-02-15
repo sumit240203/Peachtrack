@@ -58,7 +58,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt = $conn->prepare("UPDATE shift SET End_Time = ? WHERE Shift_ID = ?");
             $stmt->bind_param("si", $end_time, $current_shift_id);
             if ($stmt->execute()) {
-                $message = "Shift ended at $end_time (Shift #$current_shift_id).";
+                // Build shift summary before clearing
+                $sumStmt = $conn->prepare(
+                    "SELECT 
+                        COALESCE(SUM(t.Tip_Amount),0) AS total_tips,
+                        COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS cash_tips,
+                        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec_tips,
+                        COALESCE(s.Sale_Amount,0) AS total_sales
+                     FROM shift s
+                     LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID
+                     WHERE s.Shift_ID = ?");
+                $sumStmt->bind_param("i", $current_shift_id);
+                $sumStmt->execute();
+                $summary = $sumStmt->get_result()->fetch_assoc() ?: ['total_tips'=>0,'cash_tips'=>0,'elec_tips'=>0,'total_sales'=>0];
+
+                $message = "Shift ended (Shift #$current_shift_id). Summary — Tips: $".number_format((float)$summary['total_tips'],2)." (Cash $".number_format((float)$summary['cash_tips'],2).", Electronic $".number_format((float)$summary['elec_tips'],2).") • Sales: $".number_format((float)$summary['total_sales'],2);
                 $messageType = "success";
                 $current_shift_id = "";
                 $current_shift_start = "";
@@ -79,8 +93,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $sale_amount = (float)($_POST['sale_amount'] ?? 0);
             $is_cash = (int)($_POST['is_cash'] ?? 1);
 
-            $stmt = $conn->prepare("INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)");
-            $stmt->bind_param("idi", $current_shift_id, $tip_amount, $is_cash);
+            $stmt = $conn->prepare("INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
             if ($stmt->execute()) {
                 $upd = $conn->prepare("UPDATE shift SET Sale_Amount = Sale_Amount + ? WHERE Shift_ID = ?");
                 $upd->bind_param("di", $sale_amount, $current_shift_id);
@@ -98,17 +112,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 require_once "header.php";
 
-// Employee recent tips
+// Employee recent tips + active shift totals
 $recentTips = [];
+$shiftTotals = ['tips' => 0, 'sales' => 0];
+if ($role === '102' && $current_shift_id) {
+    $stmt = $conn->prepare("SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales FROM tip WHERE Shift_ID = ?");
+    $stmt->bind_param('i', $current_shift_id);
+    if ($stmt->execute()) {
+        $shiftTotals = $stmt->get_result()->fetch_assoc() ?: $shiftTotals;
+    }
+}
+
 if ($role === '102') {
-    $stmt = $conn->prepare(
-        "SELECT t.Tip_ID, t.Shift_ID, t.Tip_Amount, s.Sale_Amount, t.Is_It_Cash
-         FROM tip t
-         JOIN shift s ON s.Shift_ID = t.Shift_ID
-         WHERE s.Employee_ID = ?
-         ORDER BY t.Tip_ID DESC
-         LIMIT 10"
-    );
+    // Pull more rows and group them visually by shift date (from shift.Start_Time)
+    // Prefer showing the exact time the tip was logged (tip.Tip_Time). Fallback if column doesn't exist.
+    $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
+                  FROM tip t
+                  JOIN shift s ON s.Shift_ID = t.Shift_ID
+                  WHERE s.Employee_ID = ?
+                  ORDER BY s.Start_Time DESC, t.Tip_ID DESC
+                  LIMIT 30";
+
+    $stmt = $conn->prepare($sqlRecent);
+    if (!$stmt) {
+        // Fallback for older schema (no Tip_Time column)
+        $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time
+                      FROM tip t
+                      JOIN shift s ON s.Shift_ID = t.Shift_ID
+                      WHERE s.Employee_ID = ?
+                      ORDER BY s.Start_Time DESC, t.Tip_ID DESC
+                      LIMIT 30";
+        $stmt = $conn->prepare($sqlRecent);
+    }
+
     $stmt->bind_param("i", $_SESSION['id']);
     if ($stmt->execute()) {
         $recentTips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -212,8 +248,16 @@ if ($role === '101') {
           Started: <strong><?php echo htmlspecialchars($current_shift_start); ?></strong>
           <br />
           Duration: <strong><span data-start-iso="<?php echo htmlspecialchars(date('c', strtotime($current_shift_start ?: 'now'))); ?>">00:00:00</span></strong>
+          <br />
+          <span class="muted">Totals this shift:</span>
+          <strong>$<span data-shift-tips><?php echo htmlspecialchars(number_format((float)($shiftTotals['tips'] ?? 0), 2)); ?></span></strong> tips •
+          <strong>$<span data-shift-sales><?php echo htmlspecialchars(number_format((float)($shiftTotals['sales'] ?? 0), 2)); ?></span></strong> sales
         <?php else: ?>
           <strong>Not started</strong>
+          <br />
+          <span class="muted">Totals this shift:</span>
+          <strong>$<span data-shift-tips>0.00</span></strong> tips •
+          <strong>$<span data-shift-sales>0.00</span></strong> sales
         <?php endif; ?>
       </p>
 
@@ -232,7 +276,7 @@ if ($role === '101') {
         <label>Tip Amount ($)</label>
         <input type="number" step="0.01" name="tip_amount" required />
 
-        <label>Total Sales ($)</label>
+        <label>Sale Amount ($) <span class="muted" style="font-weight:400;">(for this entry)</span></label>
         <input type="number" step="0.01" name="sale_amount" required />
 
         <label>Payment Type</label>
@@ -256,28 +300,48 @@ if ($role === '101') {
     <?php if (empty($recentTips)): ?>
       <p class="muted">No tips recorded yet.</p>
     <?php else: ?>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Tip ID</th>
-            <th>Shift ID</th>
-            <th>Tip Amount</th>
-            <th>Sales Amount</th>
-            <th>Method</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($recentTips as $t): ?>
+      <?php
+        // Group tip entries by shift date (based on shift.Start_Time)
+        $grouped = [];
+        foreach ($recentTips as $t) {
+          $day = date('Y-m-d', strtotime($t['Start_Time'] ?? 'now'));
+          if (!isset($grouped[$day])) $grouped[$day] = [];
+          $grouped[$day][] = $t;
+        }
+      ?>
+
+      <?php foreach ($grouped as $day => $items): ?>
+        <div style="margin: 10px 0 6px; font-weight:900;">
+          <?php echo htmlspecialchars(date('F j, Y', strtotime($day))); ?>
+        </div>
+        <div class="muted" style="margin:-2px 0 8px; font-size:12px;">Tips logged during shifts started on this date</div>
+
+        <table class="table" style="margin-bottom: 14px;">
+          <thead>
             <tr>
-              <td><?php echo htmlspecialchars($t['Tip_ID']); ?></td>
-              <td><?php echo htmlspecialchars($t['Shift_ID']); ?></td>
-              <td>$<?php echo htmlspecialchars(number_format((float)$t['Tip_Amount'], 2)); ?></td>
-              <td>$<?php echo htmlspecialchars(number_format((float)$t['Sale_Amount'], 2)); ?></td>
-              <td><?php echo ((int)$t['Is_It_Cash'] === 1) ? 'Cash' : 'Electronic'; ?></td>
+              <th>Time</th>
+              <th>Tip Amount</th>
+              <th>Sales Amount</th>
+              <th>Method</th>
             </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <?php foreach ($items as $t): ?>
+              <tr>
+                <td>
+                  <?php
+                    $timeVal = $t['Tip_Time'] ?? $t['Start_Time'] ?? '';
+                    echo $timeVal ? htmlspecialchars(date('g:i A', strtotime($timeVal))) : '-';
+                  ?>
+                </td>
+                <td>$<?php echo htmlspecialchars(number_format((float)$t['Tip_Amount'], 2)); ?></td>
+                <td>$<?php echo htmlspecialchars(number_format((float)$t['Sale_Amount'], 2)); ?></td>
+                <td><?php echo ((int)$t['Is_It_Cash'] === 1) ? 'Cash' : 'Electronic'; ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      <?php endforeach; ?>
     <?php endif; ?>
   </div>
 

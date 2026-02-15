@@ -42,12 +42,16 @@ function nav_link($href, $label) {
 
     <nav class="nav">
       <?php nav_link('index.php', 'Dashboard'); ?>
+      <?php if ($role === '102'): ?>
+        <?php nav_link('employee_reports.php', '📈 My Reports'); ?>
+      <?php endif; ?>
       <?php if ($role === '101'): ?>
         <?php nav_link('reports.php', 'Reports'); ?>
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
         <?php nav_link('create_shift.php', '➕ Create Shift'); ?>
       <?php endif; ?>
+      <?php nav_link('about.php', 'ℹ️ About'); ?>
       <?php nav_link('logout.php', 'Logout'); ?>
     </nav>
   </aside>

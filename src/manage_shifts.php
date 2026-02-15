@@ -14,13 +14,25 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
 $message = "";
 $messageType = "";
 
-// Force-end shift
+// Force-end shift (audit-friendly)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['force_end_shift'])) {
     $shiftId = (int)($_POST['shift_id'] ?? 0);
     if ($shiftId > 0) {
         $end = date('Y-m-d H:i:s');
-        $stmt = $conn->prepare("UPDATE shift SET End_Time = ? WHERE Shift_ID = ? AND End_Time IS NULL");
-        $stmt->bind_param("si", $end, $shiftId);
+        $endedBy = (int)($_SESSION['id'] ?? 0);
+        $reason = 'Forced end';
+
+        // Prefer audit columns if present; fallback if schema not migrated yet.
+        $sql = "UPDATE shift SET End_Time = ?, Ended_By = ?, End_Reason = ? WHERE Shift_ID = ? AND End_Time IS NULL";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $sql = "UPDATE shift SET End_Time = ? WHERE Shift_ID = ? AND End_Time IS NULL";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("si", $end, $shiftId);
+        } else {
+            $stmt->bind_param("sisi", $end, $endedBy, $reason, $shiftId);
+        }
+
         if ($stmt->execute()) {
             $message = "Shift #$shiftId force-ended at $end";
             $messageType = "success";
@@ -31,17 +43,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['force_end_shift'])) {
     }
 }
 
-// Delete tip
+// Delete tip (soft delete to prevent data loss)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_tip'])) {
     $tipId = (int)($_POST['tip_id'] ?? 0);
     if ($tipId > 0) {
-        $stmt = $conn->prepare("DELETE FROM tip WHERE Tip_ID = ?");
-        $stmt->bind_param("i", $tipId);
+        $deletedBy = (int)($_SESSION['id'] ?? 0);
+        $deletedAt = date('Y-m-d H:i:s');
+
+        $sql = "UPDATE tip SET Is_Deleted = 1, Deleted_At = ?, Deleted_By = ? WHERE Tip_ID = ?";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            // Fallback for older schema (no Is_Deleted columns)
+            $stmt = $conn->prepare("DELETE FROM tip WHERE Tip_ID = ?");
+            $stmt->bind_param("i", $tipId);
+        } else {
+            $stmt->bind_param("sii", $deletedAt, $deletedBy, $tipId);
+        }
+
         if ($stmt->execute()) {
-            $message = "Tip #$tipId deleted";
+            $message = "Tip #$tipId removed";
             $messageType = "success";
         } else {
-            $message = "Error deleting tip: " . $conn->error;
+            $message = "Error removing tip: " . $conn->error;
             $messageType = "error";
         }
     }
@@ -85,7 +108,7 @@ SELECT s.Shift_ID, s.Employee_ID, e.Employee_Name, e.User_Name,
        COUNT(t.Tip_ID) AS tip_count
 FROM shift s
 JOIN employee e ON e.Employee_ID = s.Employee_ID
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
 {$where}
 GROUP BY s.Shift_ID, s.Employee_ID, e.Employee_Name, e.User_Name, s.Start_Time, s.End_Time, s.Sale_Amount
 ORDER BY s.Start_Time DESC

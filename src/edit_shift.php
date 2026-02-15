@@ -81,16 +81,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_tip'])) {
     }
 }
 
-// Delete tip
+// Delete tip (soft delete to prevent data loss)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_tip'])) {
     $tipId = (int)($_POST['tip_id'] ?? 0);
-    $stmt = $conn->prepare("DELETE FROM tip WHERE Tip_ID = ? AND Shift_ID = ?");
-    $stmt->bind_param("ii", $tipId, $shiftId);
+    $deletedBy = (int)($_SESSION['id'] ?? 0);
+    $deletedAt = date('Y-m-d H:i:s');
+
+    $sql = "UPDATE tip SET Is_Deleted = 1, Deleted_At = ?, Deleted_By = ? WHERE Tip_ID = ? AND Shift_ID = ?";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        // Fallback for older schema
+        $stmt = $conn->prepare("DELETE FROM tip WHERE Tip_ID = ? AND Shift_ID = ?");
+        $stmt->bind_param("ii", $tipId, $shiftId);
+    } else {
+        $stmt->bind_param("siii", $deletedAt, $deletedBy, $tipId, $shiftId);
+    }
+
     if ($stmt->execute()) {
-        $message = "Tip deleted.";
+        $message = "Tip removed.";
         $messageType = "success";
     } else {
-        $message = "Error deleting tip: " . $conn->error;
+        $message = "Error removing tip: " . $conn->error;
         $messageType = "error";
     }
 }
@@ -133,7 +144,7 @@ if (!$shift) {
 
 // Load tips
 $tips = [];
-$stmt = $conn->prepare("SELECT Tip_ID, Tip_Amount, Is_It_Cash FROM tip WHERE Shift_ID = ? ORDER BY Tip_ID DESC");
+$stmt = $conn->prepare("SELECT Tip_ID, Tip_Amount, Is_It_Cash FROM tip WHERE Shift_ID = ? AND (Is_Deleted IS NULL OR Is_Deleted = 0) ORDER BY Tip_ID DESC");
 $stmt->bind_param("i", $shiftId);
 $stmt->execute();
 $tips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
