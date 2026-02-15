@@ -127,6 +127,28 @@ label{display:block; font-weight:700; margin: 8px 0 6px; font-size: 13px;}
   .main{padding-left:18px; padding-right:18px;}
 }
 
+/* Phone UX improvements (employees will often use mobile) */
+@media(max-width: 560px){
+  .card{padding:14px; border-radius:14px;}
+  .kpi .value{font-size:20px;}
+
+  /* Stack any inline-grid forms into a single column */
+  form[style*="grid-template-columns"]{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Make primary actions easy to tap */
+  .btn{width:100%; padding:12px 14px;}
+  .btn + .btn{margin-top:8px;}
+
+  /* Tables: allow horizontal scroll instead of squishing */
+  .table{display:block; overflow-x:auto; -webkit-overflow-scrolling: touch;}
+  .table th, .table td{white-space:nowrap;}
+
+  /* Reduce topbar density */
+  .topbar-card{padding:12px;}
+}
+
 /* Print */
 @media print{
   body{background:#fff !important;}
