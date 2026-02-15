@@ -41,9 +41,12 @@ $mode = $_GET['mode'] ?? 'unpaid'; // unpaid | paid | all
 $hasTipTime = peachtrack_has_column($conn, 'tip', 'Tip_Time');
 $hasPayPeriod = peachtrack_has_column($conn, 'tip', 'Pay_Period_ID');
 $hasPaidAt = peachtrack_has_column($conn, 'tip', 'Paid_At');
+$hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
 
 // Choose the best date field for tips
 $tipDateExpr = $hasTipTime ? 'DATE(t.Tip_Time)' : 'DATE(s.Start_Time)';
+
+$deletedFilter = $hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0) " : "";
 
 $paidFilter = "";
 if ($hasPayPeriod) {
@@ -65,7 +68,7 @@ FROM employee e
 JOIN shift s ON s.Employee_ID = e.Employee_ID
 JOIN tip t ON t.Shift_ID = s.Shift_ID
 WHERE {$tipDateExpr} BETWEEN ? AND ?
-  AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+  {$deletedFilter}
   {$paidFilter}
 GROUP BY e.Employee_ID, e.Employee_Name, e.User_Name
 ORDER BY total_tips DESC;
@@ -134,7 +137,7 @@ UPDATE tip t
 JOIN shift s ON s.Shift_ID = t.Shift_ID
 SET t.Pay_Period_ID = ?, t.Paid_At = ?, t.Paid_By = ?
 WHERE {$tipDateExpr} BETWEEN ? AND ?
-  AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+  {$deletedFilter}
   AND t.Pay_Period_ID IS NULL;
 ";
             $stmtUpd = $conn->prepare($sqlUpd);
