@@ -221,12 +221,18 @@ require_once "header.php";
         <?php else: ?>
           <?php foreach ($tips as $t): ?>
             <?php
-              $timeVal = ($hasTipTime && !empty($t['Tip_Time'])) ? $t['Tip_Time'] : ($t['Start_Time'] ?? '');
+              $hasRealTipTime = ($hasTipTime && !empty($t['Tip_Time']));
+              $timeVal = $hasRealTipTime ? $t['Tip_Time'] : ($t['Start_Time'] ?? '');
               $status = 'n/a';
               if ($hasPayPeriod) $status = ((int)($t['Pay_Period_ID'] ?? 0) > 0) ? 'paid' : 'unpaid';
             ?>
             <tr>
-              <td><?php echo $timeVal ? htmlspecialchars(date('M j, g:i A', strtotime($timeVal))) : '-'; ?></td>
+              <td>
+                <?php
+                  echo $timeVal ? htmlspecialchars(date('M j, g:i A', strtotime($timeVal))) : '-';
+                  if (!$hasRealTipTime) echo " <span class=\"muted\" style=\"font-size:12px;\">(shift start)</span>";
+                ?>
+              </td>
               <td>#<?php echo (int)$t['Shift_ID']; ?></td>
               <td>$<?php echo htmlspecialchars(number_format((float)$t['Tip_Amount'],2)); ?></td>
               <td>$<?php echo htmlspecialchars(number_format((float)($t['Sale_Amount'] ?? 0),2)); ?></td>

@@ -44,6 +44,11 @@ if ($range === 'day') {
 $mode = $_GET['mode'] ?? 'unpaid'; // unpaid | paid | all
 $employeeFilter = $_GET['employee'] ?? 'all'; // all | employee_id
 
+// If payroll columns are missing, paid/unpaid filtering can't work.
+if (!peachtrack_has_column($conn, 'tip', 'Pay_Period_ID') && ($mode === 'paid' || $mode === 'unpaid')) {
+    $mode = 'all';
+}
+
 $hasTipTime = peachtrack_has_column($conn, 'tip', 'Tip_Time');
 $hasPayPeriod = peachtrack_has_column($conn, 'tip', 'Pay_Period_ID');
 $hasPaidAt = peachtrack_has_column($conn, 'tip', 'Paid_At');
@@ -199,6 +204,18 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
   <div class="alert <?php echo htmlspecialchars($messageType); ?>"><?php echo htmlspecialchars($message); ?></div>
 <?php endif; ?>
 
+<?php if (!$hasPayPeriod): ?>
+  <div class="alert error">
+    Payroll paid/unpaid tracking is not enabled yet. Run <strong>sql/alter_tip_payroll.sql</strong> in phpMyAdmin to enable “Paid/Unpaid” filtering and the Pay buttons.
+  </div>
+<?php endif; ?>
+
+<?php if (!$hasTipTime): ?>
+  <div class="alert" style="background: rgba(17,24,39,.04); border:1px solid rgba(17,24,39,.08)">
+    Tip time isn’t being stored yet, so tip “Time” in details may show the shift start time. To store real tip times, run <strong>sql/alter_tip_time.sql</strong>.
+  </div>
+<?php endif; ?>
+
 <div class="card">
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <div>
@@ -206,8 +223,12 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
       <div class="muted">Generate weekly/biweekly totals and export for paycheques.</div>
     </div>
     <div class="no-print" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-ghost" type="button" onclick="window.print()">🖨️ Print</button>
       <a class="btn btn-ghost" href="?<?php echo http_build_query(array_merge($_GET, ['export'=>'csv'])); ?>" style="text-decoration:none;">⬇️ Export CSV</a>
     </div>
+  </div>
+  <div class="muted no-print" style="margin-top:10px; font-size:12px;">
+    CSV downloads to your computer — open it in <strong>Excel</strong> (or Google Sheets) and copy totals into paycheques.
   </div>
 
   <div style="height:14px"></div>
@@ -247,7 +268,7 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
 
     <div>
       <label>Status</label>
-      <select name="mode" onchange="this.form.submit()">
+      <select name="mode" onchange="this.form.submit()" <?php echo (!$hasPayPeriod)?'disabled':''; ?>>
         <option value="unpaid" <?php echo ($mode==='unpaid')?'selected':''; ?>>Unpaid only</option>
         <option value="paid" <?php echo ($mode==='paid')?'selected':''; ?>>Paid only</option>
         <option value="all" <?php echo ($mode==='all')?'selected':''; ?>>All</option>

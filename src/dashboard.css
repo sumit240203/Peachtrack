@@ -85,7 +85,7 @@ body.app{
 
 .btn{padding:10px 14px; border-radius:12px; border:0; cursor:pointer; font-weight:700;}
 .btn-primary{background: linear-gradient(135deg, var(--primary), var(--primary2)); color:white;}
-.btn-ghost{background:transparent; border:1px solid var(--border);} 
+.btn-ghost{background:transparent; border:1px solid var(--border); color:#111827;} 
 .btn-secondary{background:#111827; color:white;}
 
 .alert{padding:10px 12px; border-radius:12px; margin: 0 0 14px 0; border:1px solid var(--border);}
