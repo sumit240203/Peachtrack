@@ -13,8 +13,31 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
 
 require_once "header.php";
 
-$from = $_GET['from'] ?? date('Y-m-01');
-$to   = $_GET['to']   ?? date('Y-m-d');
+// Range presets: day | week | month | custom
+$range = $_GET['range'] ?? 'month';
+$today = date('Y-m-d');
+
+$from = $_GET['from'] ?? '';
+$to   = $_GET['to']   ?? '';
+
+if ($range === 'day') {
+    $from = $today;
+    $to = $today;
+} elseif ($range === 'week') {
+    // last 7 days including today
+    $from = date('Y-m-d', strtotime('-6 days'));
+    $to = $today;
+} elseif ($range === 'custom') {
+    // keep provided from/to; fallback if empty
+    $from = $from ?: date('Y-m-01');
+    $to = $to ?: $today;
+} else {
+    // month (default)
+    $range = 'month';
+    $from = date('Y-m-01');
+    $to = $today;
+}
+
 $empId = (int)($_SESSION['id'] ?? 0);
 
 // Shifts with totals (ignore deleted tips only if schema supports it)
@@ -111,17 +134,28 @@ function fmt_duration($start, $end) {
 
   <div style="height:14px"></div>
 
-  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1fr 1fr auto; gap:12px; align-items:end;">
+  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:12px; align-items:end;">
+    <div>
+      <label>Range</label>
+      <select name="range" onchange="this.form.submit()">
+        <option value="day" <?php echo ($range==='day')?'selected':''; ?>>Today</option>
+        <option value="week" <?php echo ($range==='week')?'selected':''; ?>>Last 7 days</option>
+        <option value="month" <?php echo ($range==='month')?'selected':''; ?>>This month</option>
+        <option value="custom" <?php echo ($range==='custom')?'selected':''; ?>>Custom</option>
+      </select>
+      <div class="muted" style="font-size:12px; margin-top:6px;">Tip: choose Custom to edit dates.</div>
+    </div>
+
     <div>
       <label>From</label>
-      <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" />
+      <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
     <div>
       <label>To</label>
-      <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" />
+      <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
     <div>
-      <button class="btn btn-primary" type="submit">Apply</button>
+      <button class="btn btn-primary" type="submit" <?php echo ($range==='custom')?'':'disabled'; ?>>Apply</button>
     </div>
   </form>
 
