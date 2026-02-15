@@ -13,8 +13,28 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
 require_once "header.php";
 
 // Filters
-$from = $_GET['from'] ?? date('Y-m-01');
-$to   = $_GET['to']   ?? date('Y-m-d');
+// Range presets: day | week | month | custom
+$range = $_GET['range'] ?? 'month';
+$today = date('Y-m-d');
+
+$from = $_GET['from'] ?? '';
+$to   = $_GET['to']   ?? '';
+
+if ($range === 'day') {
+    $from = $today;
+    $to = $today;
+} elseif ($range === 'week') {
+    $from = date('Y-m-d', strtotime('-6 days'));
+    $to = $today;
+} elseif ($range === 'custom') {
+    $from = $from ?: date('Y-m-01');
+    $to = $to ?: $today;
+} else {
+    $range = 'month';
+    $from = date('Y-m-01');
+    $to = $today;
+}
+
 $employee = $_GET['employee'] ?? 'all';
 
 // Employee list
@@ -145,17 +165,21 @@ $hours = (float)($kpi['hours'] ?? 0);
 $kpi['tips_per_hour'] = ($hours > 0) ? (((float)($kpi['tips'] ?? 0)) / $hours) : 0.0;
 $kpi['sales_per_hour'] = ($hours > 0) ? (((float)($kpi['sales'] ?? 0)) / $hours) : 0.0;
 
-// Top performer
-$topName = '';
-$topTips = 0.0;
-$topSales = 0.0;
+// Top performers
+$topTipsName = '';
+$topTipsVal = -1.0;
+$topSalesName = '';
+$topSalesVal = -1.0;
 foreach ($rows as $r) {
-    if ((float)$r['total_tips'] >= $topTips) {
-        $topTips = (float)$r['total_tips'];
-        $topName = $r['Employee_Name'];
+    $t = (float)($r['total_tips'] ?? 0);
+    $s = (float)($r['total_sales'] ?? 0);
+    if ($t >= $topTipsVal) {
+        $topTipsVal = $t;
+        $topTipsName = (string)($r['Employee_Name'] ?? '');
     }
-    if ((float)$r['total_sales'] >= $topSales) {
-        $topSales = (float)$r['total_sales'];
+    if ($s >= $topSalesVal) {
+        $topSalesVal = $s;
+        $topSalesName = (string)($r['Employee_Name'] ?? '');
     }
 }
 
@@ -174,15 +198,26 @@ foreach ($rows as $r) {
 
   <div style="height:14px"></div>
 
-  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1fr 1fr 1.5fr auto; gap:12px; align-items:end;">
+  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1.1fr 1fr 1fr 1.5fr auto; gap:12px; align-items:end;">
+    <div>
+      <label>Range</label>
+      <select name="range" onchange="this.form.submit()">
+        <option value="day" <?php echo ($range==='day')?'selected':''; ?>>Today</option>
+        <option value="week" <?php echo ($range==='week')?'selected':''; ?>>Last 7 days</option>
+        <option value="month" <?php echo ($range==='month')?'selected':''; ?>>This month</option>
+        <option value="custom" <?php echo ($range==='custom')?'selected':''; ?>>Custom</option>
+      </select>
+    </div>
+
     <div>
       <label>From</label>
-      <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" />
+      <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
     <div>
       <label>To</label>
-      <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" />
+      <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
+
     <div>
       <label>Employee</label>
       <select name="employee">
@@ -194,10 +229,13 @@ foreach ($rows as $r) {
         <?php endforeach; ?>
       </select>
     </div>
+
     <div>
-      <button class="btn btn-primary" type="submit">Apply</button>
+      <button class="btn btn-primary" type="submit" <?php echo ($range==='custom')?'':'disabled'; ?>>Apply</button>
     </div>
   </form>
+
+  <div class="muted" style="margin-top:10px; font-size:12px;">Tip: choose <strong>Custom</strong> to edit dates.</div>
 </div>
 
 <div style="height:14px"></div>
@@ -216,7 +254,7 @@ foreach ($rows as $r) {
       <div class="label">Total tips (range)</div>
       <div class="value">$<?php echo htmlspecialchars(number_format((float)($kpi['tips'] ?? 0), 2)); ?></div>
     </div>
-    <div class="muted">Top performer: <?php echo htmlspecialchars($topName ?: '—'); ?></div>
+    <div class="muted">Top tips: <?php echo htmlspecialchars($topTipsName ?: '—'); ?></div>
   </div>
 
   <div class="card kpi">
@@ -253,6 +291,34 @@ foreach ($rows as $r) {
       <div class="value">$<?php echo htmlspecialchars(number_format((float)($kpi['sales_per_hour'] ?? 0), 2)); ?></div>
     </div>
     <div class="muted">sales ÷ hours</div>
+  </div>
+</div>
+
+<div style="height:14px"></div>
+
+<div class="grid grid-3">
+  <div class="card kpi">
+    <div>
+      <div class="label">Top tips performer</div>
+      <div class="value"><?php echo htmlspecialchars($topTipsName ?: '—'); ?></div>
+    </div>
+    <div class="muted">$<?php echo htmlspecialchars(number_format(max(0,(float)$topTipsVal), 2)); ?> tips</div>
+  </div>
+
+  <div class="card kpi">
+    <div>
+      <div class="label">Top sales performer</div>
+      <div class="value"><?php echo htmlspecialchars($topSalesName ?: '—'); ?></div>
+    </div>
+    <div class="muted">$<?php echo htmlspecialchars(number_format(max(0,(float)$topSalesVal), 2)); ?> sales</div>
+  </div>
+
+  <div class="card kpi">
+    <div>
+      <div class="label">Selected employee</div>
+      <div class="value"><?php echo ($employee==='all') ? 'All' : htmlspecialchars((string)$employee); ?></div>
+    </div>
+    <div class="muted">tips & sales charts update above</div>
   </div>
 </div>
 
