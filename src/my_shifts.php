@@ -42,6 +42,7 @@ $empId = (int)($_SESSION['id'] ?? 0);
 
 // Shifts with totals (ignore deleted tips only if schema supports it)
 $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
+$tipJoinCond = $hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "";
 
 $sql = "
 SELECT s.Shift_ID,
@@ -53,7 +54,7 @@ SELECT s.Shift_ID,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS tips_elec,
        COUNT(t.Tip_ID) AS tip_count
 FROM shift s
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID".($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "")."
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 WHERE s.Employee_ID = ?
   AND DATE(s.Start_Time) BETWEEN ? AND ?
 GROUP BY s.Shift_ID, s.Start_Time, s.End_Time, s.Sale_Amount
@@ -64,6 +65,58 @@ $stmt = $conn->prepare($sql);
 $stmt->bind_param('iss', $empId, $from, $to);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Charts
+// Tips by day
+$sqlTipsByDay = "
+SELECT DATE(s.Start_Time) AS day,
+       COALESCE(SUM(t.Tip_Amount),0) AS tips
+FROM shift s
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
+WHERE s.Employee_ID = ?
+  AND DATE(s.Start_Time) BETWEEN ? AND ?
+GROUP BY DATE(s.Start_Time)
+ORDER BY day ASC;
+";
+$stmt = $conn->prepare($sqlTipsByDay);
+$stmt->bind_param('iss', $empId, $from, $to);
+$stmt->execute();
+$byDayTips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$chartDayLabels = array_map(fn($x)=>$x['day'], $byDayTips);
+$chartDayTips = array_map(fn($x)=>(float)$x['tips'], $byDayTips);
+
+// Sales by day
+$sqlSalesByDay = "
+SELECT DATE(Start_Time) AS day,
+       COALESCE(SUM(Sale_Amount),0) AS sales
+FROM shift
+WHERE Employee_ID = ?
+  AND DATE(Start_Time) BETWEEN ? AND ?
+GROUP BY DATE(Start_Time)
+ORDER BY day ASC;
+";
+$stmt = $conn->prepare($sqlSalesByDay);
+$stmt->bind_param('iss', $empId, $from, $to);
+$stmt->execute();
+$byDaySales = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$chartDaySales = array_map(fn($x)=>(float)$x['sales'], $byDaySales);
+
+// Cash vs electronic
+$sqlMethod = "
+SELECT
+  COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS cash,
+  COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec
+FROM shift s
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
+WHERE s.Employee_ID = ?
+  AND DATE(s.Start_Time) BETWEEN ? AND ?;
+";
+$stmt = $conn->prepare($sqlMethod);
+$stmt->bind_param('iss', $empId, $from, $to);
+$stmt->execute();
+$method = $stmt->get_result()->fetch_assoc() ?: ['cash'=>0,'elec'=>0];
+$cash = (float)($method['cash'] ?? 0);
+$elec = (float)($method['elec'] ?? 0);
 
 // KPI range summary
 $kpi = ['shifts'=>0,'tips'=>0.0,'sales'=>0.0,'rate'=>0.0];
@@ -143,7 +196,6 @@ function fmt_duration($start, $end) {
         <option value="month" <?php echo ($range==='month')?'selected':''; ?>>This month</option>
         <option value="custom" <?php echo ($range==='custom')?'selected':''; ?>>Custom</option>
       </select>
-      <div class="muted" style="font-size:12px; margin-top:6px;">Tip: choose Custom to edit dates.</div>
     </div>
 
     <div>
@@ -159,7 +211,31 @@ function fmt_duration($start, $end) {
     </div>
   </form>
 
+  <div class="muted" style="font-size:12px; margin-top:10px;">Tip: choose <strong>Custom</strong> to edit dates.</div>
+
   <div style="height:12px"></div>
+
+  <div class="grid grid-2">
+    <div class="card">
+      <h3 style="margin-top:0;">Cash vs Electronic Tips</h3>
+      <canvas id="chartMethod" height="120"></canvas>
+      <div class="muted" style="margin-top:10px; font-size:12px;">Your tips by method.</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Tips by Day</h3>
+      <canvas id="chartDayTips" height="120"></canvas>
+    </div>
+  </div>
+
+  <div style="height:14px"></div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">Sales by Day</h3>
+    <canvas id="chartDaySales" height="110"></canvas>
+  </div>
+
+  <div style="height:14px"></div>
 
   <table class="table">
     <thead>
@@ -193,5 +269,76 @@ function fmt_duration($start, $end) {
     </tbody>
   </table>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const dayLabels = <?php echo json_encode($chartDayLabels); ?>;
+  const dayTips = <?php echo json_encode($chartDayTips); ?>;
+  const daySales = <?php echo json_encode($chartDaySales); ?>;
+  const cash = <?php echo json_encode($cash); ?>;
+  const elec = <?php echo json_encode($elec); ?>;
+
+  const peach = '#ff6b4a';
+  const dark = '#111827';
+
+  new Chart(document.getElementById('chartDayTips'), {
+    type: 'line',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: 'Tips ($)',
+        data: dayTips,
+        borderColor: peach,
+        backgroundColor: 'rgba(255,107,74,.20)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  new Chart(document.getElementById('chartDaySales'), {
+    type: 'line',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: 'Sales ($)',
+        data: daySales,
+        borderColor: dark,
+        backgroundColor: 'rgba(17,24,39,.12)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  new Chart(document.getElementById('chartMethod'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Cash', 'Electronic'],
+      datasets: [{
+        data: [cash, elec],
+        backgroundColor: [peach, dark],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      cutout: '65%'
+    }
+  });
+</script>
 
 <?php require_once "footer.php"; ?>
