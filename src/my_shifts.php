@@ -5,8 +5,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-// Employees only
-if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)($_SESSION['role'] ?? '') !== '102') {
+// Employees only (supports admin switching into employee mode)
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || peachtrack_effective_role() !== '102') {
     header('Location: index.php');
     exit;
 }
@@ -38,7 +38,7 @@ if ($range === 'day') {
     $to = $today;
 }
 
-$empId = (int)($_SESSION['id'] ?? 0);
+$empId = peachtrack_effective_employee_id();
 
 // Shifts with totals (ignore deleted tips only if schema supports it)
 $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');

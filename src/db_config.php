@@ -23,6 +23,45 @@ $conn->query("SET time_zone = '-07:00'");
 @date_default_timezone_set('America/Edmonton');
 
 // ---- Schema helpers (for graceful fallback when DB migrations haven't been run yet)
+// --- Session role helpers (supports Admin switching into Employee Mode)
+function peachtrack_base_role(): string {
+    return (string)($_SESSION['role'] ?? '');
+}
+
+function peachtrack_base_employee_id(): int {
+    return (int)($_SESSION['id'] ?? 0);
+}
+
+function peachtrack_effective_role(): string {
+    // If admin is "viewing as employee", treat role as employee for UI/pages that use this.
+    $base = peachtrack_base_role();
+    if ($base === '101' && isset($_SESSION['view_as']) && $_SESSION['view_as'] === 'employee') {
+        return '102';
+    }
+    return $base;
+}
+
+function peachtrack_effective_employee_id(): int {
+    $base = peachtrack_base_role();
+    if ($base === '101' && isset($_SESSION['view_as']) && $_SESSION['view_as'] === 'employee') {
+        return (int)($_SESSION['view_employee_id'] ?? 0);
+    }
+    return peachtrack_base_employee_id();
+}
+
+function peachtrack_effective_name(): string {
+    $base = (string)($_SESSION['name'] ?? 'User');
+    $baseRole = peachtrack_base_role();
+    if ($baseRole === '101' && isset($_SESSION['view_as']) && $_SESSION['view_as'] === 'employee') {
+        return (string)($_SESSION['view_employee_name'] ?? $base);
+    }
+    return $base;
+}
+
+function peachtrack_is_admin_base(): bool {
+    return peachtrack_base_role() === '101';
+}
+
 function peachtrack_has_column(mysqli $conn, string $table, string $column): bool {
     static $cache = [];
     $key = strtolower($table.'.'.$column);

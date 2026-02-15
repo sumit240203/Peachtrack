@@ -10,8 +10,9 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true) {
     exit;
 }
 
-$name = $_SESSION['name'] ?? 'User';
-$role = (string)($_SESSION['role'] ?? ''); // 101=Manager/Admin, 102=Employee
+$baseRole = peachtrack_base_role();
+$role = peachtrack_effective_role(); // 101=Manager/Admin, 102=Employee
+$name = peachtrack_effective_name();
 
 function nav_link($href, $label) {
     $current = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? '');
@@ -45,12 +46,17 @@ function nav_link($href, $label) {
       <?php if ($role === '102'): ?>
         <?php nav_link('my_shifts.php', '📈 My Shifts'); ?>
       <?php endif; ?>
-      <?php if ($role === '101'): ?>
+      <?php if ($baseRole === '101'): ?>
         <?php nav_link('reports.php', 'Reports'); ?>
         <?php nav_link('payroll.php', '💵 Payroll'); ?>
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
         <?php nav_link('create_shift.php', '➕ Create Shift'); ?>
+        <?php if ($role === '102'): ?>
+          <?php nav_link('switch_mode.php?exit=1', '↩ Exit Employee Mode'); ?>
+        <?php else: ?>
+          <?php nav_link('switch_mode.php', '🔁 Employee Mode'); ?>
+        <?php endif; ?>
       <?php endif; ?>
       <?php nav_link('about.php', 'ℹ️ About'); ?>
       <?php nav_link('logout.php', 'Logout'); ?>
@@ -70,6 +76,9 @@ function nav_link($href, $label) {
 
         <div class="muted" style="font-size:12px; text-align:right;">
           Role: <strong><?php echo ($role === '101') ? 'Admin/Manager' : 'Employee'; ?></strong>
+          <?php if ($baseRole === '101' && $role === '102'): ?>
+            <div class="muted" style="font-size:12px;">Admin viewing as Employee</div>
+          <?php endif; ?>
         </div>
       </div>
     </div>

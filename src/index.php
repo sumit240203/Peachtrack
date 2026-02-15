@@ -11,14 +11,24 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_
     exit;
 }
 
-$role = (string)($_SESSION['role'] ?? ''); // 101=Manager/Admin, 102=Employee
+$role = peachtrack_effective_role(); // 101=Manager/Admin, 102=Employee (supports admin switching into employee mode)
+$empId = peachtrack_effective_employee_id();
+$empName = peachtrack_effective_name();
+
+// Safety: if in employee mode but no target employee is set, exit employee mode.
+if (peachtrack_base_role() === '101' && $role === '102' && $empId <= 0) {
+    unset($_SESSION['view_as'], $_SESSION['view_employee_id'], $_SESSION['view_employee_name']);
+    $role = peachtrack_base_role();
+    $empId = peachtrack_base_employee_id();
+    $empName = (string)($_SESSION['name'] ?? 'User');
+}
 $message = "";
 $messageType = "";
 
 // Find active shift in DB (real-time truth)
 $currentShift = null;
 $stmt = $conn->prepare("SELECT Shift_ID, Start_Time FROM shift WHERE Employee_ID = ? AND End_Time IS NULL ORDER BY Shift_ID DESC LIMIT 1");
-$stmt->bind_param("i", $_SESSION['id']);
+$stmt->bind_param("i", $empId);
 if ($stmt->execute()) {
     $currentShift = $stmt->get_result()->fetch_assoc();
 }
@@ -35,7 +45,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             $start_time = date("Y-m-d H:i:s");
             $stmt = $conn->prepare("INSERT INTO shift (Employee_ID, Start_Time, Sale_Amount) VALUES (?, ?, 0.00)");
-            $stmt->bind_param("is", $_SESSION['id'], $start_time);
+            $stmt->bind_param("is", $empId, $start_time);
             if ($stmt->execute()) {
                 $current_shift_id = $conn->insert_id;
                 $current_shift_start = $start_time;
@@ -111,9 +121,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
                 if ($stmt->execute()) {
-                $upd = $conn->prepare("UPDATE shift SET Sale_Amount = Sale_Amount + ? WHERE Shift_ID = ?");
-                $upd->bind_param("di", $sale_amount, $current_shift_id);
-                $upd->execute();
+                    $upd = $conn->prepare("UPDATE shift SET Sale_Amount = Sale_Amount + ? WHERE Shift_ID = ?");
+                    $upd->bind_param("di", $sale_amount, $current_shift_id);
+                    $upd->execute();
 
                     $message = "Tip submitted.";
                     $messageType = "success";
@@ -171,7 +181,7 @@ WHERE s.Employee_ID = ? {$tipJoinCond};
 ";
 
     $stmt = $conn->prepare($sqlEmpKpi);
-    $stmt->bind_param('ssssis', $today, $weekStart, $today, $lastWeekStart, $lastWeekEnd, $_SESSION['id']);
+    $stmt->bind_param('ssssis', $today, $weekStart, $today, $lastWeekStart, $lastWeekEnd, $empId);
     if ($stmt->execute()) {
         $empKpi = $stmt->get_result()->fetch_assoc() ?: $empKpi;
     }
@@ -200,7 +210,7 @@ if ($role === '102') {
         $stmt = $conn->prepare($sqlRecent);
     }
 
-    $stmt->bind_param("i", $_SESSION['id']);
+    $stmt->bind_param("i", $empId);
     if ($stmt->execute()) {
         $recentTips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     }
