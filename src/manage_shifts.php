@@ -108,7 +108,9 @@ SELECT s.Shift_ID, s.Employee_ID, e.Employee_Name, e.User_Name,
        COUNT(t.Tip_ID) AS tip_count
 FROM shift s
 JOIN employee e ON e.Employee_ID = s.Employee_ID
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID".
+       (peachtrack_has_column($conn,'tip','Is_Deleted') ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "")."
+
 {$where}
 GROUP BY s.Shift_ID, s.Employee_ID, e.Employee_Name, e.User_Name, s.Start_Time, s.End_Time, s.Sale_Amount
 ORDER BY s.Start_Time DESC

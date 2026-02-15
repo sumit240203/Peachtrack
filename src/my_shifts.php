@@ -17,7 +17,9 @@ $from = $_GET['from'] ?? date('Y-m-01');
 $to   = $_GET['to']   ?? date('Y-m-d');
 $empId = (int)($_SESSION['id'] ?? 0);
 
-// Shifts with totals
+// Shifts with totals (ignore deleted tips only if schema supports it)
+$hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
+
 $sql = "
 SELECT s.Shift_ID,
        s.Start_Time,
@@ -28,7 +30,7 @@ SELECT s.Shift_ID,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS tips_elec,
        COUNT(t.Tip_ID) AS tip_count
 FROM shift s
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID".($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "")."
 WHERE s.Employee_ID = ?
   AND DATE(s.Start_Time) BETWEEN ? AND ?
 GROUP BY s.Shift_ID, s.Start_Time, s.End_Time, s.Sale_Amount

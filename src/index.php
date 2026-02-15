@@ -132,7 +132,12 @@ require_once "header.php";
 $recentTips = [];
 $shiftTotals = ['tips' => 0, 'sales' => 0];
 if ($role === '102' && $current_shift_id) {
-    $stmt = $conn->prepare("SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales FROM tip WHERE Shift_ID = ? AND (Is_Deleted IS NULL OR Is_Deleted = 0)");
+    $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
+    $stmt = $conn->prepare(
+        "SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales
+         FROM tip
+         WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "")
+    );
     $stmt->bind_param('i', $current_shift_id);
     if ($stmt->execute()) {
         $shiftTotals = $stmt->get_result()->fetch_assoc() ?: $shiftTotals;
@@ -142,11 +147,11 @@ if ($role === '102' && $current_shift_id) {
 if ($role === '102') {
     // Pull more rows and group them visually by shift date (from shift.Start_Time)
     // Prefer showing the exact time the tip was logged (tip.Tip_Time). Fallback if column doesn't exist.
+    $hasIsDeleted = $hasIsDeleted ?? peachtrack_has_column($conn, 'tip', 'Is_Deleted');
     $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
                   FROM tip t
                   JOIN shift s ON s.Shift_ID = t.Shift_ID
-                  WHERE s.Employee_ID = ?
-                    AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+                  WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
                   ORDER BY s.Start_Time DESC, t.Tip_ID DESC
                   LIMIT 30";
 
@@ -156,8 +161,7 @@ if ($role === '102') {
         $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time
                       FROM tip t
                       JOIN shift s ON s.Shift_ID = t.Shift_ID
-                      WHERE s.Employee_ID = ?
-                        AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+                      WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
                       ORDER BY s.Start_Time DESC, t.Tip_ID DESC
                       LIMIT 30";
         $stmt = $conn->prepare($sqlRecent);

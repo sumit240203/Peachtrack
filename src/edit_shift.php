@@ -144,7 +144,8 @@ if (!$shift) {
 
 // Load tips
 $tips = [];
-$stmt = $conn->prepare("SELECT Tip_ID, Tip_Amount, Is_It_Cash FROM tip WHERE Shift_ID = ? AND (Is_Deleted IS NULL OR Is_Deleted = 0) ORDER BY Tip_ID DESC");
+$hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
+$stmt = $conn->prepare("SELECT Tip_ID, Tip_Amount, Is_It_Cash FROM tip WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "") . " ORDER BY Tip_ID DESC");
 $stmt->bind_param("i", $shiftId);
 $stmt->execute();
 $tips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);

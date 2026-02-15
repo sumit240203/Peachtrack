@@ -26,6 +26,9 @@ $where = " WHERE DATE(s.Start_Time) BETWEEN ? AND ? ";
 $params = [$from, $to];
 $types = "ss";
 
+// If tip soft-delete schema exists, exclude deleted tips from all reports
+$tipJoinCond = peachtrack_has_column($conn, 'tip', 'Is_Deleted') ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "";
+
 if ($employee !== 'all') {
     $where .= " AND e.Employee_ID = ? ";
     $params[] = (int)$employee;
@@ -42,7 +45,7 @@ SELECT e.Employee_ID,
        COALESCE(SUM(s.Sale_Amount), 0) AS total_sales
 FROM employee e
 LEFT JOIN shift s ON s.Employee_ID = e.Employee_ID
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 ".$where."
 GROUP BY e.Employee_ID, e.Employee_Name, e.User_Name
 ORDER BY total_tips DESC;
@@ -68,7 +71,7 @@ $sqlTipsByDay = "
 SELECT DATE(s.Start_Time) AS day,
        COALESCE(SUM(t.Tip_Amount),0) AS tips
 FROM shift s
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 JOIN employee e ON e.Employee_ID = s.Employee_ID
 ".$where."
 GROUP BY DATE(s.Start_Time)
@@ -103,7 +106,7 @@ SELECT
   COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS cash,
   COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec
 FROM shift s
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 JOIN employee e ON e.Employee_ID = s.Employee_ID
 ".$where.";
 ";
@@ -126,7 +129,7 @@ SELECT COUNT(DISTINCT s.Shift_ID) AS shifts,
        COALESCE(SUM(t.Tip_Amount),0) AS tips,
        COALESCE(SUM(s.Sale_Amount),0) AS sales
 FROM shift s
-LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
+LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 JOIN employee e ON e.Employee_ID = s.Employee_ID
 ".$where.";
 ";
