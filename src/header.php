@@ -52,11 +52,6 @@ function nav_link($href, $label) {
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
         <?php nav_link('create_shift.php', '➕ Create Shift'); ?>
-        <?php if ($role === '102'): ?>
-          <?php nav_link('switch_mode.php?exit=1', '↩ Exit Employee Mode'); ?>
-        <?php else: ?>
-          <?php nav_link('switch_mode.php', '🔁 Employee Mode'); ?>
-        <?php endif; ?>
       <?php endif; ?>
       <?php nav_link('about.php', 'ℹ️ About'); ?>
       <?php nav_link('logout.php', 'Logout'); ?>
@@ -74,11 +69,23 @@ function nav_link($href, $label) {
           </div>
         </div>
 
-        <div class="muted" style="font-size:12px; text-align:right;">
-          Role: <strong><?php echo ($role === '101') ? 'Admin/Manager' : 'Employee'; ?></strong>
-          <?php if ($baseRole === '101' && $role === '102'): ?>
-            <div class="muted" style="font-size:12px;">Admin viewing as Employee</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          <?php if ($baseRole === '101'): ?>
+            <div class="mode-toggle no-print">
+              <span class="muted" style="font-size:12px; font-weight:700;">Employee Mode</span>
+              <label class="switch" title="Toggle Employee Mode">
+                <input type="checkbox" <?php echo ($role === '102') ? 'checked' : ''; ?> onchange="window.location.href = this.checked ? 'switch_mode.php' : 'switch_mode.php?exit=1';" />
+                <span class="slider"></span>
+              </label>
+            </div>
           <?php endif; ?>
+
+          <div class="muted" style="font-size:12px; text-align:right;">
+            Role: <strong><?php echo ($role === '101') ? 'Admin/Manager' : 'Employee'; ?></strong>
+            <?php if ($baseRole === '101' && $role === '102'): ?>
+              <div class="muted" style="font-size:12px;">Admin viewing as Employee</div>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>
