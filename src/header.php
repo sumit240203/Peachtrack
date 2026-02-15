@@ -47,6 +47,7 @@ function nav_link($href, $label) {
       <?php endif; ?>
       <?php if ($role === '101'): ?>
         <?php nav_link('reports.php', 'Reports'); ?>
+        <?php nav_link('payroll.php', '💵 Payroll'); ?>
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
         <?php nav_link('create_shift.php', '➕ Create Shift'); ?>

@@ -55,10 +55,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // If creating a completed shift, ensure it doesn't overlap an existing active shift
+            if (!$message && $endVal !== null) {
+                $chk = $conn->prepare("SELECT Shift_ID FROM shift WHERE Employee_ID = ? AND End_Time IS NULL AND Start_Time <= ? LIMIT 1");
+                $chk->bind_param('is', $empId, $endVal);
+                $chk->execute();
+                $active = $chk->get_result()->fetch_assoc();
+                if ($active) {
+                    $message = "This employee has an active shift (#".(int)$active['Shift_ID'].") that overlaps your end time. End it first.";
+                    $messageType = "error";
+                }
+            }
+
             if (!$message) {
                 $stmt = $conn->prepare("INSERT INTO shift (Employee_ID, Start_Time, End_Time, Sale_Amount) VALUES (?, ?, ?, ?)");
                 $stmt->bind_param("issd", $empId, $start, $endVal, $sales);
-                if ($stmt->execute()) {
+                if ($stmt->execute()) {}}
                     $newId = $conn->insert_id;
                     header("Location: edit_shift.php?id=$newId&created=1");
                     exit;

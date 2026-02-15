@@ -128,19 +128,52 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 require_once "header.php";
 
-// Employee recent tips + active shift totals
+// Employee recent tips + active shift totals + quick KPIs
 $recentTips = [];
 $shiftTotals = ['tips' => 0, 'sales' => 0];
-if ($role === '102' && $current_shift_id) {
+$empKpi = ['tips_today'=>0.0,'tips_week'=>0.0,'tips_last_week'=>0.0];
+
+if ($role === '102') {
     $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
-    $stmt = $conn->prepare(
-        "SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales
-         FROM tip
-         WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "")
-    );
-    $stmt->bind_param('i', $current_shift_id);
+    $tipJoinCond = $hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "";
+
+    // Current shift totals
+    if ($current_shift_id) {
+        $stmt = $conn->prepare(
+            "SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales
+             FROM tip
+             WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "")
+        );
+        $stmt->bind_param('i', $current_shift_id);
+        if ($stmt->execute()) {
+            $shiftTotals = $stmt->get_result()->fetch_assoc() ?: $shiftTotals;
+        }
+    }
+
+    // Employee tip KPIs (today / this week / last week)
+    $today = date('Y-m-d');
+    $weekStart = date('Y-m-d', strtotime('monday this week'));
+    $lastWeekStart = date('Y-m-d', strtotime('monday last week'));
+    $lastWeekEnd = date('Y-m-d', strtotime('sunday last week'));
+
+    // Use Tip_Time if present; else use shift.Start_Time
+    $hasTipTime = peachtrack_has_column($conn, 'tip', 'Tip_Time');
+    $dateExpr = $hasTipTime ? 'DATE(t.Tip_Time)' : 'DATE(s.Start_Time)';
+
+    $sqlEmpKpi = "
+SELECT
+  COALESCE(SUM(CASE WHEN {$dateExpr} = ? THEN t.Tip_Amount ELSE 0 END),0) AS tips_today,
+  COALESCE(SUM(CASE WHEN {$dateExpr} BETWEEN ? AND ? THEN t.Tip_Amount ELSE 0 END),0) AS tips_week,
+  COALESCE(SUM(CASE WHEN {$dateExpr} BETWEEN ? AND ? THEN t.Tip_Amount ELSE 0 END),0) AS tips_last_week
+FROM tip t
+JOIN shift s ON s.Shift_ID = t.Shift_ID
+WHERE s.Employee_ID = ? {$tipJoinCond};
+";
+
+    $stmt = $conn->prepare($sqlEmpKpi);
+    $stmt->bind_param('ssssis', $today, $weekStart, $today, $lastWeekStart, $lastWeekEnd, $_SESSION['id']);
     if ($stmt->execute()) {
-        $shiftTotals = $stmt->get_result()->fetch_assoc() ?: $shiftTotals;
+        $empKpi = $stmt->get_result()->fetch_assoc() ?: $empKpi;
     }
 }
 
@@ -274,6 +307,13 @@ if ($role === '101') {
           <span class="muted">Totals this shift:</span>
           <strong>$<span data-shift-tips><?php echo htmlspecialchars(number_format((float)($shiftTotals['tips'] ?? 0), 2)); ?></span></strong> tips •
           <strong>$<span data-shift-sales><?php echo htmlspecialchars(number_format((float)($shiftTotals['sales'] ?? 0), 2)); ?></span></strong> sales
+          <div style="height:10px"></div>
+          <div class="muted" style="font-size:12px;">Your tips summary</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div><strong>$<?php echo htmlspecialchars(number_format((float)($empKpi['tips_today'] ?? 0),2)); ?></strong> <span class="muted">today</span></div>
+            <div><strong>$<?php echo htmlspecialchars(number_format((float)($empKpi['tips_week'] ?? 0),2)); ?></strong> <span class="muted">this week</span></div>
+            <div><strong>$<?php echo htmlspecialchars(number_format((float)($empKpi['tips_last_week'] ?? 0),2)); ?></strong> <span class="muted">last week</span></div>
+          </div>
         <?php else: ?>
           <strong>Not started</strong>
           <br />

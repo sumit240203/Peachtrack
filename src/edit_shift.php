@@ -53,7 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_tip'])) {
         $message = "Tip amount must be > 0";
         $messageType = "error";
     } else {
-        $stmt = $conn->prepare("INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)");
+        // Prefer Tip_Time column if present
+        $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, NOW())";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+        }
         $stmt->bind_param("idi", $shiftId, $tip, $isCash);
         if ($stmt->execute()) {
             $message = "Tip added.";
@@ -70,14 +76,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_tip'])) {
     $tipId = (int)($_POST['tip_id'] ?? 0);
     $tip = (float)($_POST['tip_amount'] ?? 0);
     $isCash = (int)($_POST['is_cash'] ?? 1);
-    $stmt = $conn->prepare("UPDATE tip SET Tip_Amount = ?, Is_It_Cash = ? WHERE Tip_ID = ? AND Shift_ID = ?");
-    $stmt->bind_param("diii", $tip, $isCash, $tipId, $shiftId);
-    if ($stmt->execute()) {
-        $message = "Tip updated.";
-        $messageType = "success";
-    } else {
-        $message = "Error updating tip: " . $conn->error;
+
+    if ($tip <= 0) {
+        $message = "Tip amount must be > 0";
         $messageType = "error";
+    } else {
+        $stmt = $conn->prepare("UPDATE tip SET Tip_Amount = ?, Is_It_Cash = ? WHERE Tip_ID = ? AND Shift_ID = ?");
+        $stmt->bind_param("diii", $tip, $isCash, $tipId, $shiftId);
+        if ($stmt->execute()) {
+            $message = "Tip updated.";
+            $messageType = "success";
+        } else {
+            $message = "Error updating tip: " . $conn->error;
+            $messageType = "error";
+        }
     }
 }
 
