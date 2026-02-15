@@ -122,12 +122,15 @@ $kpi = [
   'shifts' => 0,
   'tips' => 0.0,
   'sales' => 0.0,
-  'rate' => 0.0,
+  'hours' => 0.0,
+  'tips_per_hour' => 0.0,
+  'sales_per_hour' => 0.0,
 ];
 $sqlKpi = "
 SELECT COUNT(DISTINCT s.Shift_ID) AS shifts,
        COALESCE(SUM(t.Tip_Amount),0) AS tips,
-       COALESCE(SUM(s.Sale_Amount),0) AS sales
+       COALESCE(SUM(s.Sale_Amount),0) AS sales,
+       COALESCE(SUM(CASE WHEN s.End_Time IS NOT NULL THEN TIMESTAMPDIFF(MINUTE, s.Start_Time, s.End_Time) ELSE 0 END),0) / 60.0 AS hours
 FROM shift s
 LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 JOIN employee e ON e.Employee_ID = s.Employee_ID
@@ -137,8 +140,10 @@ $stmt = $conn->prepare($sqlKpi);
 $stmt->bind_param($types, ...$params);
 $stmt->execute();
 $kpi = $stmt->get_result()->fetch_assoc() ?: $kpi;
-// Tip rate
-$kpi['rate'] = ((float)($kpi['sales'] ?? 0) > 0) ? (((float)($kpi['tips'] ?? 0) / (float)$kpi['sales']) * 100.0) : 0.0;
+
+$hours = (float)($kpi['hours'] ?? 0);
+$kpi['tips_per_hour'] = ($hours > 0) ? (((float)($kpi['tips'] ?? 0)) / $hours) : 0.0;
+$kpi['sales_per_hour'] = ($hours > 0) ? (((float)($kpi['sales'] ?? 0)) / $hours) : 0.0;
 
 // Top performer
 $topName = '';
@@ -211,7 +216,7 @@ foreach ($rows as $r) {
       <div class="label">Total tips (range)</div>
       <div class="value">$<?php echo htmlspecialchars(number_format((float)($kpi['tips'] ?? 0), 2)); ?></div>
     </div>
-    <div class="muted">Top: <?php echo htmlspecialchars($topName ?: '—'); ?></div>
+    <div class="muted">Top performer: <?php echo htmlspecialchars($topName ?: '—'); ?></div>
   </div>
 
   <div class="card kpi">
@@ -221,7 +226,34 @@ foreach ($rows as $r) {
     </div>
     <div class="muted">Filtered employee: <?php echo ($employee==='all') ? 'All' : htmlspecialchars((string)$employee); ?></div>
   </div>
+</div>
 
+<div style="height:14px"></div>
+
+<div class="grid grid-3">
+  <div class="card kpi">
+    <div>
+      <div class="label">Total hours (ended shifts)</div>
+      <div class="value"><?php echo htmlspecialchars(number_format((float)($kpi['hours'] ?? 0), 2)); ?></div>
+    </div>
+    <div class="muted">Active shifts excluded</div>
+  </div>
+
+  <div class="card kpi">
+    <div>
+      <div class="label">Tips per hour</div>
+      <div class="value">$<?php echo htmlspecialchars(number_format((float)($kpi['tips_per_hour'] ?? 0), 2)); ?></div>
+    </div>
+    <div class="muted">tips ÷ hours</div>
+  </div>
+
+  <div class="card kpi">
+    <div>
+      <div class="label">Sales per hour</div>
+      <div class="value">$<?php echo htmlspecialchars(number_format((float)($kpi['sales_per_hour'] ?? 0), 2)); ?></div>
+    </div>
+    <div class="muted">sales ÷ hours</div>
+  </div>
 </div>
 
 <div style="height:14px"></div>
