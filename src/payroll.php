@@ -11,7 +11,7 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
     exit;
 }
 
-require_once "header.php";
+// (Note) Do not include header.php before CSV export.
 
 // Employee list (for filtering + details)
 $employees = [];
@@ -198,6 +198,7 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
     }
 }
 
+require_once "header.php";
 ?>
 
 <?php if ($message): ?>
