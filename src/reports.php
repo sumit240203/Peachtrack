@@ -197,7 +197,7 @@ foreach ($rows as $r) {
 
 <div style="height:14px"></div>
 
-<div class="grid grid-4">
+<div class="grid grid-3">
   <div class="card kpi">
     <div>
       <div class="label">Total shifts (range)</div>
@@ -222,13 +222,6 @@ foreach ($rows as $r) {
     <div class="muted">Filtered employee: <?php echo ($employee==='all') ? 'All' : htmlspecialchars((string)$employee); ?></div>
   </div>
 
-  <div class="card kpi">
-    <div>
-      <div class="label">Tip rate (range)</div>
-      <div class="value"><?php echo htmlspecialchars(number_format((float)($kpi['rate'] ?? 0), 2)); ?>%</div>
-    </div>
-    <div class="muted">tips ÷ sales</div>
-  </div>
 </div>
 
 <div style="height:14px"></div>

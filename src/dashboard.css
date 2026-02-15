@@ -77,7 +77,7 @@ body.app{
   padding:16px;
 }
 .grid{display:grid; grid-template-columns:1fr; gap:14px;}
-@media(min-width: 980px){ .grid-2{grid-template-columns: 1fr 1fr;} .grid-3{grid-template-columns: 1fr 1fr 1fr;} .grid-4{grid-template-columns: 1fr 1fr 1fr 1fr;} }
+@media(min-width: 980px){ .grid-2{grid-template-columns: 1fr 1fr;} .grid-3{grid-template-columns: 1fr 1fr 1fr;} }
 
 .kpi{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
 .kpi .label{color:var(--muted); font-size:12px;}
