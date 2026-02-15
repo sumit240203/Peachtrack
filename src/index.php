@@ -66,7 +66,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec_tips,
                         COALESCE(s.Sale_Amount,0) AS total_sales
                      FROM shift s
-                     LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID
+                     LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
                      WHERE s.Shift_ID = ?");
                 $sumStmt->bind_param("i", $current_shift_id);
                 $sumStmt->execute();
@@ -93,18 +93,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $sale_amount = (float)($_POST['sale_amount'] ?? 0);
             $is_cash = (int)($_POST['is_cash'] ?? 1);
 
-            $stmt = $conn->prepare("INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
-            if ($stmt->execute()) {
+            // Validation
+            if ($tip_amount <= 0) {
+                $message = "Tip amount must be greater than 0.";
+                $messageType = "error";
+            } elseif ($sale_amount < 0) {
+                $message = "Sales amount cannot be negative.";
+                $messageType = "error";
+            } else {
+                // Prefer Tip_Time column if present; fallback if schema not migrated.
+                $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, ?, NOW())";
+                $stmt = $conn->prepare($sqlTip);
+                if (!$stmt) {
+                    $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)";
+                    $stmt = $conn->prepare($sqlTip);
+                }
+
+                $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
+                if ($stmt->execute()) {
                 $upd = $conn->prepare("UPDATE shift SET Sale_Amount = Sale_Amount + ? WHERE Shift_ID = ?");
                 $upd->bind_param("di", $sale_amount, $current_shift_id);
                 $upd->execute();
 
-                $message = "Tip submitted.";
-                $messageType = "success";
-            } else {
-                $message = "Error submitting tip: " . $conn->error;
-                $messageType = "error";
+                    $message = "Tip submitted.";
+                    $messageType = "success";
+                } else {
+                    $message = "Error submitting tip: " . $conn->error;
+                    $messageType = "error";
+                }
             }
         }
     }
@@ -116,7 +132,7 @@ require_once "header.php";
 $recentTips = [];
 $shiftTotals = ['tips' => 0, 'sales' => 0];
 if ($role === '102' && $current_shift_id) {
-    $stmt = $conn->prepare("SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales FROM tip WHERE Shift_ID = ?");
+    $stmt = $conn->prepare("SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales FROM tip WHERE Shift_ID = ? AND (Is_Deleted IS NULL OR Is_Deleted = 0)");
     $stmt->bind_param('i', $current_shift_id);
     if ($stmt->execute()) {
         $shiftTotals = $stmt->get_result()->fetch_assoc() ?: $shiftTotals;
@@ -130,6 +146,7 @@ if ($role === '102') {
                   FROM tip t
                   JOIN shift s ON s.Shift_ID = t.Shift_ID
                   WHERE s.Employee_ID = ?
+                    AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
                   ORDER BY s.Start_Time DESC, t.Tip_ID DESC
                   LIMIT 30";
 
@@ -140,6 +157,7 @@ if ($role === '102') {
                       FROM tip t
                       JOIN shift s ON s.Shift_ID = t.Shift_ID
                       WHERE s.Employee_ID = ?
+                        AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)
                       ORDER BY s.Start_Time DESC, t.Tip_ID DESC
                       LIMIT 30";
         $stmt = $conn->prepare($sqlRecent);

@@ -28,17 +28,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Employee and start time are required.";
         $messageType = "error";
     } else {
-        // Allow end to be empty (active shift)
-        $endVal = ($end === '') ? null : $end;
-        $stmt = $conn->prepare("INSERT INTO shift (Employee_ID, Start_Time, End_Time, Sale_Amount) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("issd", $empId, $start, $endVal, $sales);
-        if ($stmt->execute()) {
-            $newId = $conn->insert_id;
-            header("Location: edit_shift.php?id=$newId&created=1");
-            exit;
-        } else {
-            $message = "Error creating shift: " . $conn->error;
+        // Basic validation
+        if ($sales < 0) {
+            $message = "Sales amount cannot be negative.";
             $messageType = "error";
+        } else {
+            // Prevent double active shifts for the same employee
+            $endVal = ($end === '') ? null : $end;
+
+            if ($endVal === null) {
+                $chk = $conn->prepare("SELECT Shift_ID FROM shift WHERE Employee_ID = ? AND End_Time IS NULL LIMIT 1");
+                $chk->bind_param('i', $empId);
+                $chk->execute();
+                $active = $chk->get_result()->fetch_assoc();
+                if ($active) {
+                    $message = "That employee already has an active shift (#".(int)$active['Shift_ID']."). End it first (Manage Shifts) before creating a new active shift.";
+                    $messageType = "error";
+                }
+            }
+
+            // If end time is provided, it must be after start
+            if (!$message && $endVal !== null && strtotime($endVal) !== false && strtotime($start) !== false) {
+                if (strtotime($endVal) < strtotime($start)) {
+                    $message = "End time cannot be before start time.";
+                    $messageType = "error";
+                }
+            }
+
+            if (!$message) {
+                $stmt = $conn->prepare("INSERT INTO shift (Employee_ID, Start_Time, End_Time, Sale_Amount) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("issd", $empId, $start, $endVal, $sales);
+                if ($stmt->execute()) {
+                    $newId = $conn->insert_id;
+                    header("Location: edit_shift.php?id=$newId&created=1");
+                    exit;
+                } else {
+                    $message = "Error creating shift: " . $conn->error;
+                    $messageType = "error";
+                }
+            }
         }
     }
 }

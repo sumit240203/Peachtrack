@@ -43,7 +43,7 @@ function nav_link($href, $label) {
     <nav class="nav">
       <?php nav_link('index.php', 'Dashboard'); ?>
       <?php if ($role === '102'): ?>
-        <?php nav_link('employee_reports.php', '📈 My Reports'); ?>
+        <?php nav_link('my_shifts.php', '📈 My Shifts'); ?>
       <?php endif; ?>
       <?php if ($role === '101'): ?>
         <?php nav_link('reports.php', 'Reports'); ?>
