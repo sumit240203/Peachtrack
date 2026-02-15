@@ -85,8 +85,17 @@ body.app{
 
 .btn{padding:10px 14px; border-radius:12px; border:0; cursor:pointer; font-weight:700;}
 .btn-primary{background: linear-gradient(135deg, var(--primary), var(--primary2)); color:white;}
-.btn-ghost{background:transparent; border:1px solid var(--border); color:#111827;} 
+.btn-ghost{
+  background: rgba(255,107,74,.10);
+  border:1px solid rgba(255,107,74,.35);
+  color: var(--primary);
+}
+.btn-ghost:hover{ background: rgba(255,107,74,.16); border-color: rgba(255,107,74,.55); }
 .btn-secondary{background:#111827; color:white;}
+
+/* Ensure links styled as buttons keep visible text */
+a.btn, a.btn:visited{ color: inherit; }
+
 
 .alert{padding:10px 12px; border-radius:12px; margin: 0 0 14px 0; border:1px solid var(--border);}
 .alert.success{background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.22);}
