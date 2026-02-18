@@ -28,6 +28,24 @@ function nav_link($href, $label) {
   <title>PeachTrack</title>
   <link rel="stylesheet" href="style.css?v=<?php echo @filemtime(__DIR__ . '/style.css') ?: time(); ?>" />
   <link rel="stylesheet" href="dashboard.css?v=<?php echo @filemtime(__DIR__ . '/dashboard.css') ?: time(); ?>" />
+
+  <!-- Datepicker (Flatpickr) for consistent, modern calendar UI -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', function(){
+      if (!window.flatpickr) return;
+      document.querySelectorAll('input[data-datepicker]').forEach(function(el){
+        // Skip if already initialized
+        if (el._flatpickr) return;
+        flatpickr(el, {
+          dateFormat: 'Y-m-d',
+          allowInput: true,
+          disableMobile: true
+        });
+      });
+    });
+  </script>
 </head>
 <body class="app">
 

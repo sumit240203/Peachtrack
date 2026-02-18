@@ -198,7 +198,7 @@ foreach ($rows as $r) {
 
   <div style="height:14px"></div>
 
-  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1.1fr 1fr 1fr 1.5fr auto; gap:12px; align-items:end;">
+  <form class="no-print filter-bar" method="GET" style="grid-template-columns: 1.1fr 1fr 1fr 1.5fr auto;">
     <div>
       <label>Range</label>
       <select name="range" onchange="this.form.submit()">
@@ -209,13 +209,13 @@ foreach ($rows as $r) {
       </select>
     </div>
 
-    <div>
+    <div class="field">
       <label>From</label>
-      <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
+      <input type="text" inputmode="numeric" data-datepicker name="from" value="<?php echo htmlspecialchars($from); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
-    <div>
+    <div class="field">
       <label>To</label>
-      <input type="date" name="to" value="<?php echo htmlspecialchars($to); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
+      <input type="text" inputmode="numeric" data-datepicker name="to" value="<?php echo htmlspecialchars($to); ?>" <?php echo ($range==='custom')?'':'disabled'; ?> />
     </div>
 
     <div>

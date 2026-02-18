@@ -119,6 +119,22 @@ a.btn, a.btn:visited{ color: inherit; }
 input,select{width:100%; padding:10px; border-radius:12px; border:1px solid rgba(17,24,39,.12); background: rgba(255,255,255,.85)}
 label{display:block; font-weight:700; margin: 8px 0 6px; font-size: 13px;}
 
+/* Filter bars (Range / Employee / Status) */
+.filter-bar{display:grid; gap:12px; align-items:end;}
+.filter-bar .field{min-width:0;}
+.filter-bar select, .filter-bar input{background: rgba(255,255,255,.92);}
+.filter-bar select{appearance:none; background-image: linear-gradient(45deg, transparent 50%, rgba(17,24,39,.55) 50%), linear-gradient(135deg, rgba(17,24,39,.55) 50%, transparent 50%); background-position: calc(100% - 16px) calc(50% - 3px), calc(100% - 11px) calc(50% - 3px); background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right:34px;}
+.filter-bar input:disabled, .filter-bar select:disabled{opacity:.6; cursor:not-allowed; background: rgba(17,24,39,.04);}
+.filter-bar .btn{width:100%;}
+
+/* Flatpickr calendar theme tweaks */
+.flatpickr-calendar{border-radius:16px !important; border:1px solid rgba(17,24,39,.10) !important; box-shadow: 0 10px 30px rgba(17,24,39,.12) !important; overflow:hidden;}
+.flatpickr-months .flatpickr-month{background: linear-gradient(135deg, rgba(255,107,74,.16), rgba(255,166,130,.16));}
+.flatpickr-current-month, .flatpickr-weekday{font-weight:800;}
+.flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange{background: var(--primary) !important; border-color: var(--primary) !important;}
+.flatpickr-day.today{border-color: rgba(255,107,74,.55) !important;}
+
+
 /* Mobile sidebar */
 @media(max-width: 860px){
   .sidebar{position:fixed; left:-280px; transition:left .25s ease; z-index:50;}
