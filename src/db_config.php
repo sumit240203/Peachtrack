@@ -1,12 +1,12 @@
 <?php
-// MAMP MySQL database configuration for PeachTrack
-// Note: In this MAMP setup, MySQL is reachable via Unix socket.
-$host   = getenv('DB_HOST') ?: 'localhost';
-$port   = (int)(getenv('DB_PORT') ?: 8889);
-$socket = getenv('DB_SOCKET') ?: '/Applications/MAMP/tmp/mysql/mysql.sock';
+// Local DB configuration for PeachTrack
+// Default: Homebrew MariaDB/MySQL (free alternative to MAMP)
+$host   = getenv('DB_HOST') ?: '127.0.0.1';
+$port   = (int)(getenv('DB_PORT') ?: 3306);
+$socket = getenv('DB_SOCKET') ?: null; // optional
 $db     = getenv('DB_NAME') ?: 'peachtrack';
-$user   = getenv('DB_USER') ?: 'root';
-$pass   = getenv('DB_PASS') ?: 'root';
+$user   = getenv('DB_USER') ?: 'peach';
+$pass   = getenv('DB_PASS') ?: 'peach123';
 
 $conn = new mysqli($host, $user, $pass, $db, $port, $socket);
 
