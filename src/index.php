@@ -111,15 +111,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $message = "Sales amount cannot be negative.";
                 $messageType = "error";
             } else {
-                // Prefer Tip_Time column if present; fallback if schema not migrated.
-                $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, ?, NOW())";
-                $stmt = $conn->prepare($sqlTip);
-                if (!$stmt) {
-                    $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)";
+                $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
+
+                // Insert tip (supports older schema without tip.Sale_Amount)
+                if ($hasTipSale) {
+                    $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, ?, NOW())";
                     $stmt = $conn->prepare($sqlTip);
+                    if (!$stmt) {
+                        $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)";
+                        $stmt = $conn->prepare($sqlTip);
+                    }
+                    $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
+                } else {
+                    $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, NOW())";
+                    $stmt = $conn->prepare($sqlTip);
+                    if (!$stmt) {
+                        $sqlTip = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)";
+                        $stmt = $conn->prepare($sqlTip);
+                    }
+                    $stmt->bind_param("idi", $current_shift_id, $tip_amount, $is_cash);
                 }
 
-                $stmt->bind_param("iddi", $current_shift_id, $tip_amount, $sale_amount, $is_cash);
                 if ($stmt->execute()) {
                     $upd = $conn->prepare("UPDATE shift SET Sale_Amount = Sale_Amount + ? WHERE Shift_ID = ?");
                     $upd->bind_param("di", $sale_amount, $current_shift_id);
@@ -149,10 +161,12 @@ if ($role === '102') {
 
     // Current shift totals
     if ($current_shift_id) {
+        $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
         $stmt = $conn->prepare(
-            "SELECT COALESCE(SUM(Tip_Amount),0) AS tips, COALESCE(SUM(Sale_Amount),0) AS sales
-             FROM tip
-             WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "")
+            "SELECT COALESCE(SUM(Tip_Amount),0) AS tips, " .
+            ($hasTipSale ? "COALESCE(SUM(Sale_Amount),0)" : "0") . " AS sales\n" .
+            "FROM tip\n" .
+            "WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "")
         );
         $stmt->bind_param('i', $current_shift_id);
         if ($stmt->execute()) {
@@ -191,7 +205,8 @@ if ($role === '102') {
     // Pull more rows and group them visually by shift date (from shift.Start_Time)
     // Prefer showing the exact time the tip was logged (tip.Tip_Time). Fallback if column doesn't exist.
     $hasIsDeleted = $hasIsDeleted ?? peachtrack_has_column($conn, 'tip', 'Is_Deleted');
-    $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
+    $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
+    $sqlRecent = "SELECT t.Tip_Amount, " . ($hasTipSale ? "t.Sale_Amount" : "s.Sale_Amount") . " AS Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
                   FROM tip t
                   JOIN shift s ON s.Shift_ID = t.Shift_ID
                   WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
@@ -201,7 +216,7 @@ if ($role === '102') {
     $stmt = $conn->prepare($sqlRecent);
     if (!$stmt) {
         // Fallback for older schema (no Tip_Time column)
-        $sqlRecent = "SELECT t.Tip_Amount, t.Sale_Amount, t.Is_It_Cash, s.Start_Time
+        $sqlRecent = "SELECT t.Tip_Amount, " . ($hasTipSale ? "t.Sale_Amount" : "s.Sale_Amount") . " AS Sale_Amount, t.Is_It_Cash, s.Start_Time
                       FROM tip t
                       JOIN shift s ON s.Shift_ID = t.Shift_ID
                       WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
