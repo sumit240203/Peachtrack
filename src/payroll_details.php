@@ -67,7 +67,7 @@ if (!$emp) {
 $sqlTips = "
 SELECT t.Tip_ID,
        t.Tip_Amount,
-       t.Sale_Amount,
+       ".(peachtrack_has_column($conn,'tip','Sale_Amount') ? "t.Sale_Amount" : "0.00 AS Sale_Amount").",
        t.Is_It_Cash,
        s.Shift_ID,
        s.Start_Time,

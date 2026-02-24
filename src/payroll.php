@@ -53,6 +53,8 @@ $hasTipTime = peachtrack_has_column($conn, 'tip', 'Tip_Time');
 $hasPayPeriod = peachtrack_has_column($conn, 'tip', 'Pay_Period_ID');
 $hasPaidAt = peachtrack_has_column($conn, 'tip', 'Paid_At');
 $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
+$hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
+$saleExpr = $hasTipSale ? 't.Sale_Amount' : '0';
 
 // Choose the best date field for tips
 $tipDateExpr = $hasTipTime ? 'DATE(t.Tip_Time)' : 'DATE(s.Start_Time)';
@@ -80,7 +82,7 @@ SELECT e.Employee_ID,
        COALESCE(SUM(t.Tip_Amount),0) AS total_tips,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS cash_tips,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec_tips,
-       COALESCE(SUM(t.Sale_Amount),0) AS total_sales,
+       COALESCE(SUM($saleExpr),0) AS total_sales,
        COUNT(t.Tip_ID) AS tip_count
 FROM employee e
 JOIN shift s ON s.Employee_ID = e.Employee_ID
