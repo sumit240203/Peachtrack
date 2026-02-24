@@ -110,7 +110,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Disposition: attachment; filename="peachtrack_payroll_'.$from.'_to_'.$to.'_'.$mode.'.csv"');
 
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['Employee', 'Username', 'Period From', 'Period To', 'Total Tips', 'Cash Tips', 'Electronic Tips', 'Total Sales', 'Tip Count', 'Status']);
+    // Explicit escape parameter to avoid PHP deprecation warnings corrupting CSV output
+    fputcsv($out, ['Employee', 'Username', 'Period From', 'Period To', 'Total Tips', 'Cash Tips', 'Electronic Tips', 'Total Sales', 'Tip Count', 'Status'], ',', '"', '\\');
     foreach ($rows as $r) {
         $status = 'n/a';
         if ($hasPayPeriod) {
@@ -127,7 +128,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             number_format((float)$r['total_sales'], 2, '.', ''),
             (int)$r['tip_count'],
             $status
-        ]);
+        ], ',', '"', '\\');
     }
     fclose($out);
     exit;
