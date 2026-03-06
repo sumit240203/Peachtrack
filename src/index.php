@@ -206,7 +206,12 @@ if ($role === '102') {
     // Prefer showing the exact time the tip was logged (tip.Tip_Time). Fallback if column doesn't exist.
     $hasIsDeleted = $hasIsDeleted ?? peachtrack_has_column($conn, 'tip', 'Is_Deleted');
     $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
-    $sqlRecent = "SELECT t.Tip_Amount, " . ($hasTipSale ? "t.Sale_Amount" : "s.Sale_Amount") . " AS Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
+    // IMPORTANT: if tip.Sale_Amount is not enabled, showing shift.Sale_Amount here looks like an error
+    // because it repeats the shift total on every tip row. In that case we show 0.00 per row and
+    // add a note prompting the DB migration (sql/alter_tip_sale_amount.sql).
+    $saleColExpr = $hasTipSale ? "t.Sale_Amount" : "0";
+
+    $sqlRecent = "SELECT t.Tip_Amount, {$saleColExpr} AS Sale_Amount, t.Is_It_Cash, s.Start_Time, t.Tip_Time
                   FROM tip t
                   JOIN shift s ON s.Shift_ID = t.Shift_ID
                   WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
@@ -216,7 +221,7 @@ if ($role === '102') {
     $stmt = $conn->prepare($sqlRecent);
     if (!$stmt) {
         // Fallback for older schema (no Tip_Time column)
-        $sqlRecent = "SELECT t.Tip_Amount, " . ($hasTipSale ? "t.Sale_Amount" : "s.Sale_Amount") . " AS Sale_Amount, t.Is_It_Cash, s.Start_Time
+        $sqlRecent = "SELECT t.Tip_Amount, {$saleColExpr} AS Sale_Amount, t.Is_It_Cash, s.Start_Time
                       FROM tip t
                       JOIN shift s ON s.Shift_ID = t.Shift_ID
                       WHERE s.Employee_ID = ?" . ($hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "") . "
@@ -318,6 +323,9 @@ if ($role === '101') {
 <?php else: ?>
 
   <div class="grid grid-2">
+    <div class="no-print" style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <a class="btn btn-ghost" href="print_employee_summary.php?range=week" target="_blank" style="text-decoration:none;">🖨️ Print Tip Summary</a>
+    </div>
     <div class="card">
       <h3 style="margin-top:0;">Shift</h3>
       <p class="muted" style="margin-top:0;">
@@ -384,6 +392,11 @@ if ($role === '101') {
 
   <div class="card">
     <h3 style="margin-top:0;">Recent Tips</h3>
+    <?php if (!peachtrack_has_column($conn,'tip','Sale_Amount')): ?>
+      <div class="muted" style="font-size:12px; margin-top:-6px; margin-bottom:10px;">
+        Note: individual sales per tip are not enabled yet. Ask your admin to run <strong>sql/alter_tip_sale_amount.sql</strong> so each tip row can show its own sale amount.
+      </div>
+    <?php endif; ?>
     <?php if (empty($recentTips)): ?>
       <p class="muted">No tips recorded yet.</p>
     <?php else: ?>

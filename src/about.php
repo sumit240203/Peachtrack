@@ -33,6 +33,15 @@ require_once "header.php";
         Institution: <strong>Lethbridge College</strong><br />
         Year: <strong>2026</strong>
       </p>
+      <div style="height:10px"></div>
+      <div class="muted" style="font-size:12px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;">Team members</div>
+      <ol class="muted" style="margin:8px 0 0; padding-left:18px;">
+        <li>Sumit Niveriya</li>
+        <li>Mandeep Kaur</li>
+        <li>Eliser Roluna</li>
+        <li>Fidelis Fabowale</li>
+        <li>Felix Ernest Eshun</li>
+      </ol>
     </div>
 
     <div class="card" style="margin:0;">
@@ -50,6 +59,12 @@ require_once "header.php";
         <li>MAMP (local development)</li>
         <li>Chart.js (reports)</li>
       </ul>
+      <div style="height:12px"></div>
+      <hr style="border:none; border-top:1px solid rgba(17,24,39,.10); margin:12px 0;" />
+      <div class="muted" style="font-size:12px;">
+        © 2026 <strong>Cyber Dominion</strong>. All rights reserved. PeachTrack is an academic project created for
+        <strong>Computer Information Technology</strong>, Lethbridge College.
+      </div>
     </div>
   </div>
 </div>

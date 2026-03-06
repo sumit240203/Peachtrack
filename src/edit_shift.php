@@ -34,8 +34,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_shift'])) {
 
     $endVal = ($end === '') ? null : $end;
 
-    $stmt = $conn->prepare("UPDATE shift SET Start_Time = ?, End_Time = ?, Sale_Amount = ? WHERE Shift_ID = ?");
-    $stmt->bind_param("ssdi", $start, $endVal, $sales, $shiftId);
+    // Audit: record that an admin edited the shift (and who)
+    $hasAudit = peachtrack_has_column($conn, 'shift', 'Updated_At') && peachtrack_has_column($conn, 'shift', 'Updated_By');
+    if ($hasAudit) {
+        $updatedAt = date('Y-m-d H:i:s');
+        $updatedBy = (int)($_SESSION['id'] ?? 0);
+        $note = trim($_POST['update_note'] ?? '');
+        if ($note === '') $note = 'Edited by admin';
+
+        $stmt = $conn->prepare("UPDATE shift SET Start_Time = ?, End_Time = ?, Sale_Amount = ?, Updated_At = ?, Updated_By = ?, Update_Note = ? WHERE Shift_ID = ?");
+        // types: start(s), end(s), sales(d), updatedAt(s), updatedBy(i), note(s), shiftId(i)
+        $stmt->bind_param("ssdsisi", $start, $endVal, $sales, $updatedAt, $updatedBy, $note, $shiftId);
+    } else {
+        $stmt = $conn->prepare("UPDATE shift SET Start_Time = ?, End_Time = ?, Sale_Amount = ? WHERE Shift_ID = ?");
+        $stmt->bind_param("ssdi", $start, $endVal, $sales, $shiftId);
+    }
+
     if ($stmt->execute()) {
         $message = "Shift updated.";
         $messageType = "success";
@@ -190,7 +204,7 @@ require_once "header.php";
 
   <div style="height:14px"></div>
 
-  <form method="POST" class="no-print" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:12px; align-items:end;">
+  <form method="POST" class="no-print" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1.2fr auto; gap:12px; align-items:end;">
     <input type="hidden" name="update_shift" value="1" />
     <div>
       <label>Start Time</label>
@@ -203,6 +217,10 @@ require_once "header.php";
     <div>
       <label>Sales Amount</label>
       <input type="number" step="0.01" name="sale_amount" value="<?php echo htmlspecialchars((string)$shift['Sale_Amount']); ?>" />
+    </div>
+    <div>
+      <label>Update note (optional)</label>
+      <input type="text" name="update_note" placeholder="e.g., corrected sales / fixed end time" />
     </div>
     <div>
       <button class="btn btn-primary" type="submit">Save</button>

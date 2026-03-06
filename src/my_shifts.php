@@ -44,20 +44,27 @@ $empId = peachtrack_effective_employee_id();
 $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
 $tipJoinCond = $hasIsDeleted ? " AND (t.Is_Deleted IS NULL OR t.Is_Deleted = 0)" : "";
 
+// Optional audit fields (so employees can see when an admin edited a shift)
+$hasShiftAudit = peachtrack_has_column($conn, 'shift', 'Updated_At') && peachtrack_has_column($conn, 'shift', 'Updated_By');
+$auditSelect = $hasShiftAudit ? ", s.Updated_At, s.Updated_By, s.Update_Note, u.Employee_Name AS updated_by_name" : "";
+$auditJoin = $hasShiftAudit ? " LEFT JOIN employee u ON u.Employee_ID = s.Updated_By" : "";
+
 $sql = "
 SELECT s.Shift_ID,
        s.Start_Time,
        s.End_Time,
-       COALESCE(s.Sale_Amount,0) AS sales,
+       COALESCE(s.Sale_Amount,0) AS sales
+       {$auditSelect},
        COALESCE(SUM(t.Tip_Amount),0) AS tips,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS tips_cash,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS tips_elec,
        COUNT(t.Tip_ID) AS tip_count
 FROM shift s
+{$auditJoin}
 LEFT JOIN tip t ON t.Shift_ID = s.Shift_ID{$tipJoinCond}
 WHERE s.Employee_ID = ?
   AND DATE(s.Start_Time) BETWEEN ? AND ?
-GROUP BY s.Shift_ID, s.Start_Time, s.End_Time, s.Sale_Amount
+GROUP BY s.Shift_ID, s.Start_Time, s.End_Time, s.Sale_Amount" . ($hasShiftAudit ? ", s.Updated_At, s.Updated_By, s.Update_Note, u.Employee_Name" : "") . "
 ORDER BY s.Start_Time DESC
 ";
 
@@ -179,9 +186,13 @@ function fmt_duration($start, $end) {
     <div>
       <h2 style="margin:0;">📈 My Shifts</h2>
       <div class="muted">View your shift history and totals. Deleted tips are excluded.</div>
+      <?php if (!$hasShiftAudit): ?>
+        <div class="muted" style="font-size:12px; margin-top:6px;">Note: shift edit auditing is not enabled yet. Run <strong>sql/alter_shift_edit_audit.sql</strong> to show who edited a shift.</div>
+      <?php endif; ?>
     </div>
-    <div class="no-print" style="display:flex; gap:10px;">
-      <button class="btn btn-ghost" onclick="window.print()">🖨️ Print</button>
+    <div class="no-print" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn btn-ghost" href="print_employee_summary.php?range=<?php echo htmlspecialchars($range); ?>" target="_blank" style="text-decoration:none;">🖨️ Print Tip Summary</a>
+      <button class="btn btn-ghost" onclick="window.print()">🖨️ Print Page</button>
     </div>
   </div>
 
@@ -247,11 +258,12 @@ function fmt_duration($start, $end) {
         <th>Tips</th>
         <th>Sales</th>
         <th>Tip rate</th>
+        <th>Edited</th>
       </tr>
     </thead>
     <tbody>
       <?php if (!$rows): ?>
-        <tr><td colspan="7" class="muted">No shifts found for this range.</td></tr>
+        <tr><td colspan="8" class="muted">No shifts found for this range.</td></tr>
       <?php else: ?>
         <?php foreach ($rows as $r): ?>
           <?php $rate = ((float)$r['sales'] > 0) ? (((float)$r['tips'] / (float)$r['sales']) * 100.0) : 0.0; ?>
@@ -263,6 +275,21 @@ function fmt_duration($start, $end) {
             <td>$<?php echo htmlspecialchars(number_format((float)$r['tips'],2)); ?></td>
             <td>$<?php echo htmlspecialchars(number_format((float)$r['sales'],2)); ?></td>
             <td><?php echo htmlspecialchars(number_format($rate,2)); ?>%</td>
+            <td>
+              <?php if ($hasShiftAudit && !empty($r['Updated_At'])): ?>
+                <div class="muted" style="font-size:12px;">
+                  <?php echo htmlspecialchars(date('M j, Y g:i A', strtotime($r['Updated_At']))); ?>
+                  <?php if (!empty($r['updated_by_name'])): ?>
+                    <br />by <strong><?php echo htmlspecialchars($r['updated_by_name']); ?></strong>
+                  <?php endif; ?>
+                  <?php if (!empty($r['Update_Note'])): ?>
+                    <br /><span class="muted"><?php echo htmlspecialchars($r['Update_Note']); ?></span>
+                  <?php endif; ?>
+                </div>
+              <?php else: ?>
+                <span class="muted">—</span>
+              <?php endif; ?>
+            </td>
           </tr>
         <?php endforeach; ?>
       <?php endif; ?>

@@ -132,13 +132,16 @@ require_once "header.php";
   <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
     <div>
       <h2 style="margin:0;">🕒 Manage Shifts</h2>
-      <div class="muted">View shifts, tips, and force-end active shifts.</div>
+      <div class="muted">Practical admin tools for active shifts and shift history.</div>
+    </div>
+    <div class="no-print" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn btn-primary" href="create_shift.php" style="text-decoration:none;">+ Add New Shift</a>
     </div>
   </div>
 
-  <div style="height:14px"></div>
+  <div style="height:12px"></div>
 
-  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1fr 1fr 1.5fr auto; gap:12px; align-items:end;">
+  <form class="no-print" method="GET" style="display:grid; grid-template-columns: 1fr 1fr 1.5fr auto; gap:10px; align-items:end;">
     <div>
       <label>From</label>
       <input type="date" name="from" value="<?php echo htmlspecialchars($from); ?>" />
@@ -164,11 +167,22 @@ require_once "header.php";
   </form>
 </div>
 
-<div style="height:14px"></div>
+<style>
+  /* Practical admin density for shift management */
+  .table.compact th, .table.compact td{ padding:10px 12px; }
+  .section-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .section-title h3{ margin:0; }
+</style>
 
-<div class="card">
-  <h3 style="margin-top:0;">⚡ Active Shifts (Live)</h3>
-  <table class="table">
+<div style="height:12px"></div>
+
+<details class="card" open>
+  <summary class="section-title" style="list-style:none; cursor:pointer;">
+    <h3>⚡ Active Shifts (Live)</h3>
+    <span class="muted" style="font-size:12px;">Click to collapse/expand</span>
+  </summary>
+  <div style="height:12px"></div>
+  <table class="table compact">
     <thead>
       <tr>
         <th>Employee</th>
@@ -199,13 +213,17 @@ require_once "header.php";
       <?php endforeach; ?>
     </tbody>
   </table>
-</div>
+</details>
 
-<div style="height:14px"></div>
+<div style="height:12px"></div>
 
-<div class="card">
-  <h3 style="margin-top:0;">📌 Shifts (<?php echo htmlspecialchars($from); ?> → <?php echo htmlspecialchars($to); ?>)</h3>
-  <table class="table">
+<details class="card" open>
+  <summary class="section-title" style="list-style:none; cursor:pointer;">
+    <h3>📌 Shifts (<?php echo htmlspecialchars($from); ?> → <?php echo htmlspecialchars($to); ?>)</h3>
+    <span class="muted" style="font-size:12px;">Click to collapse/expand</span>
+  </summary>
+  <div style="height:12px"></div>
+  <table class="table compact">
     <thead>
       <tr>
         <th>Employee</th>
@@ -238,6 +256,6 @@ require_once "header.php";
       <?php endforeach; ?>
     </tbody>
   </table>
-</div>
+</details>
 
 <?php require_once "footer.php"; ?>

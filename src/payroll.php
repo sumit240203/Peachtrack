@@ -107,7 +107,20 @@ $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 // Export CSV
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="peachtrack_payroll_'.$from.'_to_'.$to.'_'.$mode.'.csv"');
+    $safeName = '';
+    if ($employeeFilter !== 'all') {
+        // Look up employee name to embed in filename
+        foreach ($employees as $e) {
+            if ((string)$e['Employee_ID'] === (string)$employeeFilter) {
+                $safeName = preg_replace('/[^a-z0-9_-]+/i', '_', (string)$e['Employee_Name']);
+                $safeName = trim($safeName, '_');
+                break;
+            }
+        }
+    }
+    $baseFile = 'peachtrack_payroll_'.$from.'_to_'.$to.'_'.$mode;
+    if ($safeName) $baseFile .= '_'.$safeName;
+    header('Content-Disposition: attachment; filename="'.$baseFile.'.csv"');
 
     $out = fopen('php://output', 'w');
     // Explicit escape parameter to avoid PHP deprecation warnings corrupting CSV output
@@ -180,11 +193,14 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
   {$empWhere};
 ";
             $stmtUpd = $conn->prepare($sqlUpd);
-            $ppid = $payPeriodId; // can be null
+            // If no tip_pay_period row exists, use 0 to still mark tips as paid (0 is NOT NULL).
+            $ppid = ($payPeriodId !== null) ? (int)$payPeriodId : 0;
             if ($payEmployeeId > 0) {
-                $stmtUpd->bind_param('ssissi', $ppid, $paidAt, $paidBy, $from, $to, $payEmployeeId);
+                // i = Pay_Period_ID, s = Paid_At, i = Paid_By, s = From, s = To, i = Employee_ID
+                $stmtUpd->bind_param('isissi', $ppid, $paidAt, $paidBy, $from, $to, $payEmployeeId);
             } else {
-                $stmtUpd->bind_param('ssiss', $ppid, $paidAt, $paidBy, $from, $to);
+                // i = Pay_Period_ID, s = Paid_At, i = Paid_By, s = From, s = To
+                $stmtUpd->bind_param('isiss', $ppid, $paidAt, $paidBy, $from, $to);
             }
             $stmtUpd->execute();
 

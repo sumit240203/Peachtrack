@@ -71,7 +71,6 @@ function nav_link($href, $label) {
         <?php nav_link('payroll.php', '💵 Payroll'); ?>
         <?php nav_link('manage_users.php', '👤 Manage Users'); ?>
         <?php nav_link('manage_shifts.php', '🕒 Manage Shifts'); ?>
-        <?php nav_link('create_shift.php', '➕ Create Shift'); ?>
       <?php endif; ?>
 
       <?php nav_link('about.php', 'ℹ️ About'); ?>
