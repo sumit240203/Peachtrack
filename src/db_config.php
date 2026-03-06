@@ -50,12 +50,14 @@ function peachtrack_effective_employee_id(): int {
 }
 
 function peachtrack_effective_name(): string {
-    $base = (string)($_SESSION['name'] ?? 'User');
-    $baseRole = peachtrack_base_role();
-    if ($baseRole === '101' && isset($_SESSION['view_as']) && $_SESSION['view_as'] === 'employee') {
-        return (string)($_SESSION['view_employee_name'] ?? $base);
-    }
-    return $base;
+    // Keep displaying the admin's own name even in Employee Mode.
+    // (Employee Mode should change permissions/views, not identity.)
+    return (string)($_SESSION['name'] ?? 'User');
+}
+
+function peachtrack_view_employee_name(): string {
+    // Only populated when an admin is viewing as an employee.
+    return (string)($_SESSION['view_employee_name'] ?? '');
 }
 
 function peachtrack_is_admin_base(): bool {

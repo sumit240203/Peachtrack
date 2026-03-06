@@ -109,7 +109,7 @@ function nav_link($href, $label) {
           <div class="muted" style="font-size:12px; text-align:right;">
             Role: <strong><?php echo ($role === '101') ? 'Admin/Manager' : 'Employee'; ?></strong>
             <?php if ($baseRole === '101' && $role === '102'): ?>
-              <div class="muted" style="font-size:12px;">Admin viewing as Employee</div>
+              <div class="muted" style="font-size:12px;">Viewing as Employee<?php $ven = peachtrack_view_employee_name(); if ($ven) echo ': <strong>'.htmlspecialchars($ven).'</strong>'; ?></div>
             <?php endif; ?>
           </div>
         </div>

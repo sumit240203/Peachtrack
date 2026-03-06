@@ -151,6 +151,7 @@ $message = '';
 $messageType = '';
 
 // Mark period as paid (creates a pay period row + links tips)
+// NOTE: This runs BEFORE rendering so we can redirect (PRG) and the UI updates instantly.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['mark_paid']) || isset($_POST['mark_paid_employee']))) {
     $payEmployeeId = 0;
     if (isset($_POST['mark_paid_employee'])) {
@@ -205,10 +206,15 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
             $stmtUpd->execute();
 
             $conn->commit();
-            $message = ($payEmployeeId > 0)
-                ? 'Marked unpaid tips for this employee in this range as PAID.'
-                : 'Marked unpaid tips in this range as PAID.';
-            $messageType = 'success';
+
+            // Redirect to refresh the page data (so paid items disappear from Unpaid immediately)
+            $q = $_GET;
+            // stay in the same mode if paying in 'all'; otherwise keep current view
+            $q['mode'] = ($mode === 'paid') ? 'paid' : $mode;
+            $q['paid'] = '1';
+            $q['msg'] = ($payEmployeeId > 0) ? 'paid_employee' : 'paid_all';
+            header('Location: payroll.php?'.http_build_query($q));
+            exit;
         } catch (Throwable $e) {
             $conn->rollback();
             $message = 'Error marking paid: '.$e->getMessage();
