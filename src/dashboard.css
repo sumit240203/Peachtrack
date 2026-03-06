@@ -119,6 +119,16 @@ a.btn, a.btn:visited{ color: inherit; }
 input,select{width:100%; padding:10px; border-radius:12px; border:1px solid rgba(17,24,39,.12); background: rgba(255,255,255,.85)}
 label{display:block; font-weight:700; margin: 8px 0 6px; font-size: 13px;}
 
+/* Inline edit forms inside tables (Edit Shift → Edit transaction) */
+.inline-edit-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap:10px;
+  align-items:end;
+}
+.inline-edit-grid .btn{width:100%;}
+.inline-edit-grid input[type="number"]{font-variant-numeric: tabular-nums;}
+
 /* Filter bars (Range / Employee / Status) */
 .filter-bar{display:grid; gap:12px; align-items:end;}
 .filter-bar .field{min-width:0;}

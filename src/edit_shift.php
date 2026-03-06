@@ -307,7 +307,7 @@ require_once "header.php";
               <td class="no-print">
                 <details>
                   <summary class="muted" style="cursor:pointer;">Edit</summary>
-                  <form method="POST" style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:end;">
+                  <form method="POST" class="inline-edit-grid" style="margin-top:10px;">
                     <input type="hidden" name="tip_id" value="<?php echo (int)$t['Tip_ID']; ?>" />
                     <input type="hidden" name="update_tip" value="1" />
                     <div>
@@ -330,7 +330,7 @@ require_once "header.php";
                       </select>
                     </div>
                     <div>
-                      <button class="btn btn-primary" type="submit">Save</button>
+                      <button class="btn btn-primary" type="submit">Save Changes</button>
                     </div>
                   </form>
                   <form method="POST" style="margin-top:8px;">
