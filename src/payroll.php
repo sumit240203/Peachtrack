@@ -15,7 +15,7 @@ if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || (string)(
 
 // Employee list (for filtering + details)
 $employees = [];
-$res = $conn->query("SELECT Employee_ID, Employee_Name, User_Name FROM employee ORDER BY Employee_Name ASC");
+$res = $conn->query("SELECT Employee_ID, Employee_Name, User_Name FROM employee ORDER BY Employee_Name ASC"); // User_Name kept for internal linking only
 if ($res) $employees = $res->fetch_all(MYSQLI_ASSOC);
 
 // Range presets: day | week | month | custom
@@ -78,12 +78,12 @@ if ($employeeFilter !== 'all') {
 $sql = "
 SELECT e.Employee_ID,
        e.Employee_Name,
-       e.User_Name,
        COALESCE(SUM(t.Tip_Amount),0) AS total_tips,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=1 THEN t.Tip_Amount ELSE 0 END),0) AS cash_tips,
        COALESCE(SUM(CASE WHEN t.Is_It_Cash=0 THEN t.Tip_Amount ELSE 0 END),0) AS elec_tips,
        COALESCE(SUM($saleExpr),0) AS total_sales,
-       COUNT(t.Tip_ID) AS tip_count
+       COUNT(t.Tip_ID) AS tip_count,
+       COUNT(DISTINCT s.Shift_ID) AS shift_count
 FROM employee e
 JOIN shift s ON s.Employee_ID = e.Employee_ID
 JOIN tip t ON t.Shift_ID = s.Shift_ID
@@ -91,7 +91,7 @@ WHERE {$tipDateExpr} BETWEEN ? AND ?
   {$deletedFilter}
   {$paidFilter}
   {$empFilterSql}
-GROUP BY e.Employee_ID, e.Employee_Name, e.User_Name
+GROUP BY e.Employee_ID, e.Employee_Name
 ORDER BY total_tips DESC;
 ";
 
@@ -124,7 +124,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
     $out = fopen('php://output', 'w');
     // Explicit escape parameter to avoid PHP deprecation warnings corrupting CSV output
-    fputcsv($out, ['Employee', 'Username', 'Period From', 'Period To', 'Total Tips', 'Cash Tips', 'Electronic Tips', 'Total Sales', 'Tip Count', 'Status'], ',', '"', '\\');
+    fputcsv($out, ['Employee', 'Period From', 'Period To', 'Total Tips', 'Cash Tips', 'Electronic Tips', 'Total Sales', 'Tip Count', 'Shift Count', 'Status'], ',', '"', '\\');
     foreach ($rows as $r) {
         $status = 'n/a';
         if ($hasPayPeriod) {
@@ -132,7 +132,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         }
         fputcsv($out, [
             $r['Employee_Name'],
-            $r['User_Name'],
             $from,
             $to,
             number_format((float)$r['total_tips'], 2, '.', ''),
@@ -140,6 +139,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             number_format((float)$r['elec_tips'], 2, '.', ''),
             number_format((float)$r['total_sales'], 2, '.', ''),
             (int)$r['tip_count'],
+            (int)$r['shift_count'],
             $status
         ], ',', '"', '\\');
     }
@@ -308,12 +308,12 @@ require_once "header.php";
     <thead>
       <tr>
         <th>Employee</th>
-        <th>Username</th>
         <th>Total Tips</th>
         <th>Cash</th>
         <th>Electronic</th>
         <th>Total Sales</th>
-        <th>Tips Count</th>
+        <th>Tips</th>
+        <th>Shifts</th>
         <th class="no-print">Actions</th>
       </tr>
     </thead>
@@ -324,19 +324,21 @@ require_once "header.php";
         <?php foreach ($rows as $r): ?>
           <tr>
             <td><?php echo htmlspecialchars($r['Employee_Name']); ?></td>
-            <td><?php echo htmlspecialchars($r['User_Name']); ?></td>
             <td>$<?php echo htmlspecialchars(number_format((float)$r['total_tips'],2)); ?></td>
             <td class="muted">$<?php echo htmlspecialchars(number_format((float)$r['cash_tips'],2)); ?></td>
             <td class="muted">$<?php echo htmlspecialchars(number_format((float)$r['elec_tips'],2)); ?></td>
             <td>$<?php echo htmlspecialchars(number_format((float)$r['total_sales'],2)); ?></td>
             <td class="muted"><?php echo (int)$r['tip_count']; ?></td>
+            <td class="muted"><?php echo (int)$r['shift_count']; ?></td>
             <td class="no-print">
               <a class="btn btn-ghost" style="text-decoration:none;" href="payroll_details.php?<?php echo http_build_query(['employee_id'=>(int)$r['Employee_ID'],'from'=>$from,'to'=>$to,'range'=>$range,'mode'=>$mode]); ?>">Details</a>
-              <form method="POST" style="display:inline; margin-left:6px;">
-                <input type="hidden" name="mark_paid_employee" value="1" />
-                <input type="hidden" name="employee_id" value="<?php echo (int)$r['Employee_ID']; ?>" />
-                <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark this employee\'s unpaid tips in this range as PAID?')">Pay</button>
-              </form>
+              <?php if ($hasPayPeriod && $mode !== 'paid'): ?>
+                <form method="POST" style="display:inline; margin-left:6px;">
+                  <input type="hidden" name="mark_paid_employee" value="1" />
+                  <input type="hidden" name="employee_id" value="<?php echo (int)$r['Employee_ID']; ?>" />
+                  <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark this employee\'s unpaid tips in this range as PAID?')">Pay</button>
+                </form>
+              <?php endif; ?>
             </td>
           </tr>
         <?php endforeach; ?>
@@ -346,15 +348,17 @@ require_once "header.php";
 
   <div style="height:14px"></div>
 
-  <form method="POST" class="no-print">
-    <input type="hidden" name="mark_paid" value="1" />
-    <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark ALL employees\' unpaid tips in this date range as PAID?')">
-      Mark this range as Paid (All employees)
-    </button>
-    <div class="muted" style="margin-top:10px; font-size:12px;">
-      Use row-level <strong>Pay</strong> to pay a single employee, or this button to pay everyone.
-    </div>
-  </form>
+  <?php if ($hasPayPeriod && $mode !== 'paid'): ?>
+    <form method="POST" class="no-print">
+      <input type="hidden" name="mark_paid" value="1" />
+      <button class="btn btn-secondary" type="submit" onclick="return confirm('Mark ALL employees\' unpaid tips in this date range as PAID?')">
+        Mark this range as Paid (All employees)
+      </button>
+      <div class="muted" style="margin-top:10px; font-size:12px;">
+        Use row-level <strong>Pay</strong> to pay a single employee, or this button to pay everyone.
+      </div>
+    </form>
+  <?php endif; ?>
 </div>
 
 <?php require_once "footer.php"; ?>

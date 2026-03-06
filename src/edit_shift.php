@@ -63,18 +63,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_shift'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_tip'])) {
     $tip = (float)($_POST['tip_amount'] ?? 0);
     $isCash = (int)($_POST['is_cash'] ?? 1);
+    $tipSale = (float)($_POST['sale_amount'] ?? 0);
+    $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
     if ($tip <= 0) {
         $message = "Tip amount must be > 0";
         $messageType = "error";
     } else {
         // Prefer Tip_Time column if present
-        $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, NOW())";
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)";
+        // Also save per-tip sale amount if schema supports it.
+        if ($hasTipSale) {
+            $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, ?, NOW())";
             $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Sale_Amount, Is_It_Cash) VALUES (?, ?, ?, ?)";
+                $stmt = $conn->prepare($sql);
+            }
+            $stmt->bind_param("iddi", $shiftId, $tip, $tipSale, $isCash);
+        } else {
+            $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash, Tip_Time) VALUES (?, ?, ?, NOW())";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                $sql = "INSERT INTO tip (Shift_ID, Tip_Amount, Is_It_Cash) VALUES (?, ?, ?)";
+                $stmt = $conn->prepare($sql);
+            }
+            $stmt->bind_param("idi", $shiftId, $tip, $isCash);
         }
-        $stmt->bind_param("idi", $shiftId, $tip, $isCash);
         if ($stmt->execute()) {
             $message = "Tip added.";
             $messageType = "success";
@@ -90,13 +103,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_tip'])) {
     $tipId = (int)($_POST['tip_id'] ?? 0);
     $tip = (float)($_POST['tip_amount'] ?? 0);
     $isCash = (int)($_POST['is_cash'] ?? 1);
+    $tipSale = (float)($_POST['sale_amount'] ?? 0);
+    $hasTipSale = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
 
     if ($tip <= 0) {
         $message = "Tip amount must be > 0";
         $messageType = "error";
     } else {
-        $stmt = $conn->prepare("UPDATE tip SET Tip_Amount = ?, Is_It_Cash = ? WHERE Tip_ID = ? AND Shift_ID = ?");
-        $stmt->bind_param("diii", $tip, $isCash, $tipId, $shiftId);
+        if ($hasTipSale) {
+            $stmt = $conn->prepare("UPDATE tip SET Tip_Amount = ?, Sale_Amount = ?, Is_It_Cash = ? WHERE Tip_ID = ? AND Shift_ID = ?");
+            $stmt->bind_param("ddiii", $tip, $tipSale, $isCash, $tipId, $shiftId);
+        } else {
+            $stmt = $conn->prepare("UPDATE tip SET Tip_Amount = ?, Is_It_Cash = ? WHERE Tip_ID = ? AND Shift_ID = ?");
+            $stmt->bind_param("diii", $tip, $isCash, $tipId, $shiftId);
+        }
         if ($stmt->execute()) {
             $message = "Tip updated.";
             $messageType = "success";
@@ -171,7 +191,9 @@ if (!$shift) {
 // Load tips
 $tips = [];
 $hasIsDeleted = peachtrack_has_column($conn, 'tip', 'Is_Deleted');
-$stmt = $conn->prepare("SELECT Tip_ID, Tip_Amount, Is_It_Cash FROM tip WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "") . " ORDER BY Tip_ID DESC");
+$hasTipSaleCol = peachtrack_has_column($conn, 'tip', 'Sale_Amount');
+$tipSelect = $hasTipSaleCol ? "SELECT Tip_ID, Tip_Amount, Sale_Amount, Is_It_Cash" : "SELECT Tip_ID, Tip_Amount, Is_It_Cash";
+$stmt = $conn->prepare($tipSelect . " FROM tip WHERE Shift_ID = ?" . ($hasIsDeleted ? " AND (Is_Deleted IS NULL OR Is_Deleted = 0)" : "") . " ORDER BY Tip_ID DESC");
 $stmt->bind_param("i", $shiftId);
 $stmt->execute();
 $tips = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -239,6 +261,12 @@ require_once "header.php";
       <input type="hidden" name="add_tip" value="1" />
       <label>Tip Amount</label>
       <input type="number" step="0.01" name="tip_amount" required />
+
+      <?php if (peachtrack_has_column($conn,'tip','Sale_Amount')): ?>
+        <label>Sales Amount (for this tip)</label>
+        <input type="number" step="0.01" name="sale_amount" value="0" />
+      <?php endif; ?>
+
       <label>Method</label>
       <select name="is_cash">
         <option value="1">Cash</option>
@@ -260,6 +288,9 @@ require_once "header.php";
           <tr>
             <th>Tip ID</th>
             <th>Amount</th>
+            <?php if (peachtrack_has_column($conn,'tip','Sale_Amount')): ?>
+              <th>Sales</th>
+            <?php endif; ?>
             <th>Method</th>
             <th class="no-print">Actions</th>
           </tr>
@@ -269,17 +300,28 @@ require_once "header.php";
             <tr>
               <td class="muted">#<?php echo (int)$t['Tip_ID']; ?></td>
               <td>$<?php echo htmlspecialchars(number_format((float)$t['Tip_Amount'],2)); ?></td>
+              <?php if (peachtrack_has_column($conn,'tip','Sale_Amount')): ?>
+                <td>$<?php echo htmlspecialchars(number_format((float)($t['Sale_Amount'] ?? 0),2)); ?></td>
+              <?php endif; ?>
               <td><?php echo ((int)$t['Is_It_Cash']===1)?'Cash':'Electronic'; ?></td>
               <td class="no-print">
                 <details>
                   <summary class="muted" style="cursor:pointer;">Edit</summary>
-                  <form method="POST" style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr auto auto; gap:8px; align-items:end;">
+                  <form method="POST" style="margin-top:10px; display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:end;">
                     <input type="hidden" name="tip_id" value="<?php echo (int)$t['Tip_ID']; ?>" />
                     <input type="hidden" name="update_tip" value="1" />
                     <div>
                       <label>Amount</label>
                       <input type="number" step="0.01" name="tip_amount" value="<?php echo htmlspecialchars((string)$t['Tip_Amount']); ?>" required />
                     </div>
+
+                    <?php if (peachtrack_has_column($conn,'tip','Sale_Amount')): ?>
+                      <div>
+                        <label>Sales</label>
+                        <input type="number" step="0.01" name="sale_amount" value="<?php echo htmlspecialchars((string)($t['Sale_Amount'] ?? 0)); ?>" />
+                      </div>
+                    <?php endif; ?>
+
                     <div>
                       <label>Method</label>
                       <select name="is_cash">

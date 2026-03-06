@@ -267,8 +267,13 @@ function fmt_duration($start, $end) {
       <?php else: ?>
         <?php foreach ($rows as $r): ?>
           <?php $rate = ((float)$r['sales'] > 0) ? (((float)$r['tips'] / (float)$r['sales']) * 100.0) : 0.0; ?>
-          <tr>
-            <td>#<?php echo (int)$r['Shift_ID']; ?></td>
+          <tr <?php echo ($hasShiftAudit && !empty($r['Updated_At'])) ? 'style="background: rgba(250, 204, 21, .08);"' : ''; ?>>
+            <td>
+              #<?php echo (int)$r['Shift_ID']; ?>
+              <?php if ($hasShiftAudit && !empty($r['Updated_At'])): ?>
+                <span class="pill" style="margin-left:6px; font-size:11px; background:rgba(250,204,21,.25); color:#7c5a00;">Edited</span>
+              <?php endif; ?>
+            </td>
             <td><?php echo fmt_dt($r['Start_Time']); ?></td>
             <td><?php echo fmt_dt($r['End_Time']); ?></td>
             <td><?php echo htmlspecialchars(fmt_duration($r['Start_Time'], $r['End_Time'])); ?></td>
